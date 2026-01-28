@@ -1,0 +1,130 @@
+# ICO Workflow Generator - Rule Mappings Configuration
+# This file defines templates and their matching rules for JIRA text parsing
+
+# Scoring weights for template matching
+scoring:
+  pattern_match: 50    # Regex pattern matched
+  keyword_match: 10    # Individual keyword found
+  required_match: 30   # Required keyword combination found
+  action_match: 40     # Action type matched
+
+# Template definitions
+templates:
+  # MDS SAN Zoning - Add Host to SAN
+  - name: add_host_to_san
+    module: workflow_templates.mds.add_host_to_san
+    patterns:
+      - "add.*host.*san"
+      - "zone.*host"
+      - "new.*host.*fabric"
+      - "provision.*host.*san"
+      - "add.*server.*zone"
+    keywords:
+      - add
+      - host
+      - san
+      - zone
+      - fabric
+      - wwpn
+      - vsan
+      - device alias
+      - zoneset
+    required_keywords:
+      - [host, zone]
+      - [san, add]
+      - [wwpn, zone]
+    priority: 100
+    category: MDS
+
+  # MDS Save Configuration
+  - name: mds_save_config
+    module: workflow_templates.mds.save_config
+    patterns:
+      - "save.*config"
+      - "copy.*running.*startup"
+      - "persist.*config"
+      - "write.*memory"
+    keywords:
+      - save
+      - config
+      - configuration
+      - running
+      - startup
+      - persist
+      - copy
+      - mds
+    required_keywords:
+      - [save, config]
+      - [copy, running]
+    priority: 80
+    category: MDS
+
+  # Compute - Toggle Locator LED
+  - name: toggle_locator_led
+    module: workflow_templates.compute.toggle_locator_led
+    patterns:
+      - "toggle.*led"
+      - "locator.*led"
+      - "turn.*(on|off).*led"
+      - "blink.*led"
+      - "identify.*server"
+      - "led.*(on|off)"
+    keywords:
+      - toggle
+      - led
+      - locator
+      - blink
+      - identify
+      - server
+      - light
+    required_keywords:
+      - [led]
+      - [locator]
+      - [identify, server]
+    priority: 90
+    category: Compute
+
+  # Compute - Get Server Inventory
+  - name: get_server_inventory
+    module: workflow_templates.compute.get_server_inventory
+    patterns:
+      - "get.*inventory"
+      - "list.*server"
+      - "show.*server"
+      - "server.*list"
+      - "compute.*inventory"
+    keywords:
+      - inventory
+      - list
+      - server
+      - compute
+      - show
+      - get
+    required_keywords:
+      - [inventory]
+      - [list, server]
+    priority: 70
+    category: Compute
+
+# Action type to template mappings
+action_mappings:
+  add_host_to_san: add_host_to_san
+  create_zone: add_host_to_san
+  add_to_zoneset: add_host_to_san
+  add_device_alias: add_host_to_san
+  activate_zoneset: add_host_to_san
+  save_config: mds_save_config
+  toggle_led: toggle_locator_led
+  get_inventory: get_server_inventory
+
+# Category descriptions (for UI)
+categories:
+  MDS:
+    label: MDS SAN Operations
+    description: Workflows for Cisco MDS SAN switch management
+  Compute:
+    label: Compute Operations
+    description: Workflows for server/compute management
+  Network:
+    label: Network Operations
+    description: Workflows for network device management

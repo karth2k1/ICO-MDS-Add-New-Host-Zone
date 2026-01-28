@@ -1,0 +1,320 @@
+[
+  {
+    "Body": {
+      "ClassId": "workflow.TaskDefinition",
+      "DefaultVersion": true,
+      "Description": "Saves the running configuration to startup configuration on an MDS switch. Ensures all changes persist across reboots.",
+      "Label": "Save MDS Configuration",
+      "Name": "SaveMDSConfiguration",
+      "ObjectType": "workflow.TaskDefinition",
+      "Properties": {
+        "ExternalMeta": true,
+        "InputDefinition": [
+          {
+            "CustomDataTypeProperties": {
+              "CatalogMoid": "shared",
+              "CustomDataTypeName": "MDSTargetDataType",
+              "ObjectType": "workflow.CustomDataProperty"
+            },
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "MDS target switch to save configuration on",
+            "DisplayMeta": {
+              "InventorySelector": true,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "MDS Switch",
+            "Name": "mds_switch",
+            "ObjectType": "workflow.TargetDataType",
+            "Properties": [],
+            "Required": true
+          }
+        ],
+        "ObjectType": "workflow.Properties",
+        "OutputDefinition": [
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "API response from save operation",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Response",
+            "Name": "response",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "json"
+            }
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "Result message",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Result",
+            "Name": "result",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "string"
+            }
+          }
+        ],
+        "RetryCount": 3,
+        "RetryDelay": 60,
+        "RetryPolicy": "Fixed",
+        "SupportStatus": "Supported",
+        "Timeout": 600,
+        "TimeoutPolicy": "Timeout"
+      },
+      "RollbackTasks": [],
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "MDS"
+        },
+        {
+          "Key": "category",
+          "Value": "Networking"
+        },
+        {
+          "Key": "feature",
+          "Value": "Configuration-Management"
+        }
+      ],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/TaskDefinitions",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "Batch": [
+        {
+          "Body": "{\n  \"ins_api\": {\n    \"version\": \"1.2\",\n    \"type\": \"cli_conf\",\n    \"chunk\": \"0\",\n    \"sid\": \"1\",\n    \"input\": \"copy running-config startup-config\",\n    \"output_format\": \"json\"\n  }\n}",
+          "ContentType": "json",
+          "Description": "Execute copy running-config startup-config on MDS switch",
+          "EndpointRequestType": "Internal",
+          "Label": "Save Running to Startup",
+          "Method": "POST",
+          "Name": "CopyRunningToStartup",
+          "ObjectType": "workflow.WebApi",
+          "Outcomes": [],
+          "Protocol": "https",
+          "ResponseSpec": {
+            "ErrorParameters": [],
+            "ObjectType": "content.Grammar",
+            "Parameters": [
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "api_response",
+                "ObjectType": "content.Parameter",
+                "Path": "$",
+                "Secure": false,
+                "Type": "json"
+              },
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "output_body",
+                "ObjectType": "content.Parameter",
+                "Path": "$.ins_api.outputs.output.body",
+                "Secure": false,
+                "Type": "json"
+              }
+            ],
+            "Types": []
+          },
+          "TargetType": "Endpoint",
+          "Url": "/ins"
+        }
+      ],
+      "CancelAction": [],
+      "ClassId": "workflow.BatchApiExecutor",
+      "Constraints": {
+        "ObjectType": "workflow.TaskConstraints"
+      },
+      "Description": "Saves the running configuration to startup configuration on an MDS switch",
+      "Name": "Save MDS Configuration",
+      "ObjectType": "workflow.BatchApiExecutor",
+      "Output": {
+        "response": "{{.global.CopyRunningToStartup.output.api_response}}",
+        "result": "Configuration saved successfully. Running-config copied to startup-config."
+      },
+      "SharedScope": "user",
+      "TaskDefinition": {
+        "ObjectType": "workflow.TaskDefinition",
+        "Selector": "Name eq 'SaveMDSConfiguration' and Version eq 1"
+      }
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/BatchApiExecutors",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "ClassId": "workflow.WorkflowDefinition",
+      "DefaultVersion": true,
+      "Description": "Simple workflow to save MDS switch configuration. Copies running-config to startup-config to persist changes across reboots.",
+      "InputDefinition": [
+        {
+          "CustomDataTypeProperties": {
+            "CatalogMoid": "shared",
+            "CustomDataTypeName": "MDSTargetDataType",
+            "ObjectType": "workflow.CustomDataProperty"
+          },
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "Select the MDS switch to save configuration on",
+          "DisplayMeta": {
+            "InventorySelector": true,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "MDS Switch",
+          "Name": "mds_switch",
+          "ObjectType": "workflow.TargetDataType",
+          "Properties": [],
+          "Required": true
+        }
+      ],
+      "InputParameterSet": [],
+      "Label": "Save MDS Switch Configuration",
+      "Name": "SaveMDSSwitchConfiguration",
+      "ObjectType": "workflow.WorkflowDefinition",
+      "OutputDefinition": [
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "Result of the save operation",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "Result",
+          "Name": "result",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "string"
+          }
+        }
+      ],
+      "OutputParameters": {
+        "result": "${SaveConfigTask.output.result}"
+      },
+      "Properties": {
+        "EnableDebug": true,
+        "ExternalMeta": true,
+        "ObjectType": "workflow.WorkflowProperties",
+        "SupportStatus": "Supported"
+      },
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "MDS"
+        },
+        {
+          "Key": "category",
+          "Value": "Networking"
+        },
+        {
+          "Key": "feature",
+          "Value": "Configuration-Management"
+        }
+      ],
+      "Tasks": [
+        {
+          "Name": "StartTask",
+          "NextTask": "SaveConfigTask",
+          "ObjectType": "workflow.StartTask"
+        },
+        {
+          "Name": "SuccessEndTask",
+          "ObjectType": "workflow.SuccessEndTask"
+        },
+        {
+          "Name": "FailureEndTask",
+          "ObjectType": "workflow.FailureEndTask"
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Save the running configuration to startup configuration",
+          "InputParameters": {
+            "mds_switch": "${workflow.input.mds_switch}"
+          },
+          "Label": "Save Configuration",
+          "Name": "SaveConfigTask",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "SuccessEndTask",
+          "OnFailure": "FailureEndTask",
+          "TaskDefinitionName": "SaveMDSConfiguration",
+          "Version": 1
+        }
+      ],
+      "UiInputFilters": [],
+      "UiRenderingData": {
+        "Positions": [
+          {"Name": "StartTask", "X": 300, "Y": 100},
+          {"Name": "SaveConfigTask", "X": 300, "Y": 200},
+          {"Name": "SuccessEndTask", "X": 300, "Y": 300},
+          {"Name": "FailureEndTask", "X": 450, "Y": 300}
+        ]
+      },
+      "VariableDefinition": [],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/WorkflowDefinitions",
+    "Verb": "POST"
+  }
+]

@@ -1,0 +1,314 @@
+[
+    {
+      "Body": {
+        "ClassId": "workflow.TaskDefinition",
+        "DefaultVersion": false,
+        "Description": "Toggles the locator LED on a physical server by querying the LocatorLeds API with a filter - Version 5",
+        "Label": "Toggle Server Locator LED Version5",
+        "Name": "ToggleServerLocatorLEDVersion5",
+        "ObjectType": "workflow.TaskDefinition",
+        "Properties": {
+          "ExternalMeta": false,
+          "InputDefinition": [
+            {
+              "Default": {
+                "ObjectType": "workflow.DefaultValue"
+              },
+              "Description": "Select the target server",
+              "DisplayMeta": {
+                "InventorySelector": true,
+                "ObjectType": "workflow.DisplayMeta",
+                "WidgetType": "None"
+              },
+              "Label": "Server",
+              "Name": "server_moid",
+              "ObjectType": "workflow.PrimitiveDataType",
+              "Properties": {
+                "Constraints": {
+                  "EnumList": [],
+                  "ObjectType": "workflow.Constraints"
+                },
+                "InventorySelector": [
+                  {
+                    "DisplayAttributes": ["Name", "Serial", "Model", "ManagementMode"],
+                    "ObjectType": "workflow.MoReferenceProperty",
+                    "Selector": "/api/v1/compute/PhysicalSummaries",
+                    "SelectorProperty": {
+                      "Method": "GET",
+                      "ObjectType": "workflow.SelectorProperty"
+                    },
+                    "ValueAttribute": "Moid"
+                  }
+                ],
+                "ObjectType": "workflow.PrimitiveDataProperty",
+                "Type": "string"
+              },
+              "Required": true
+            },
+            {
+              "Default": {
+                "ObjectType": "workflow.DefaultValue",
+                "Override": true,
+                "Value": "On"
+              },
+              "Description": "Turn the locator LED on or off",
+              "DisplayMeta": {
+                "InventorySelector": false,
+                "ObjectType": "workflow.DisplayMeta",
+                "WidgetType": "Radio"
+              },
+              "Label": "LED State",
+              "Name": "led_state",
+              "ObjectType": "workflow.PrimitiveDataType",
+              "Properties": {
+                "Constraints": {
+                  "EnumList": [
+                    {
+                      "Label": "Turn On",
+                      "ObjectType": "workflow.EnumEntry",
+                      "Value": "On"
+                    },
+                    {
+                      "Label": "Turn Off",
+                      "ObjectType": "workflow.EnumEntry",
+                      "Value": "Off"
+                    }
+                  ],
+                  "ObjectType": "workflow.Constraints"
+                },
+                "InventorySelector": [],
+                "ObjectType": "workflow.PrimitiveDataProperty",
+                "Type": "enum"
+              },
+              "Required": true
+            }
+          ],
+          "ObjectType": "workflow.Properties",
+          "OutputDefinition": [
+            {
+              "Default": {
+                "ObjectType": "workflow.DefaultValue"
+              },
+              "Description": "The Moid of the LocatorLed that was updated",
+              "DisplayMeta": {
+                "InventorySelector": false,
+                "ObjectType": "workflow.DisplayMeta",
+                "WidgetType": "None"
+              },
+              "Label": "LocatorLed Moid",
+              "Name": "locator_led_moid",
+              "ObjectType": "workflow.PrimitiveDataType",
+              "Properties": {
+                "Constraints": {
+                  "EnumList": [],
+                  "ObjectType": "workflow.Constraints"
+                },
+                "InventorySelector": [],
+                "ObjectType": "workflow.PrimitiveDataProperty",
+                "Type": "string"
+              }
+            },
+            {
+              "Default": {
+                "ObjectType": "workflow.DefaultValue"
+              },
+              "Description": "The result of the LED operation",
+              "DisplayMeta": {
+                "InventorySelector": false,
+                "ObjectType": "workflow.DisplayMeta",
+                "WidgetType": "None"
+              },
+              "Label": "Result",
+              "Name": "result",
+              "ObjectType": "workflow.PrimitiveDataType",
+              "Properties": {
+                "Constraints": {
+                  "EnumList": [],
+                  "ObjectType": "workflow.Constraints"
+                },
+                "InventorySelector": [],
+                "ObjectType": "workflow.PrimitiveDataProperty",
+                "Type": "string"
+              }
+            },
+            {
+              "Default": {
+                "ObjectType": "workflow.DefaultValue"
+              },
+              "Description": "Full API response from LED update",
+              "DisplayMeta": {
+                "InventorySelector": false,
+                "ObjectType": "workflow.DisplayMeta",
+                "WidgetType": "None"
+              },
+              "Label": "Response",
+              "Name": "response",
+              "ObjectType": "workflow.PrimitiveDataType",
+              "Properties": {
+                "Constraints": {
+                  "EnumList": [],
+                  "ObjectType": "workflow.Constraints"
+                },
+                "InventorySelector": [],
+                "ObjectType": "workflow.PrimitiveDataProperty",
+                "Type": "json"
+              }
+            }
+          ],
+          "RetryCount": 3,
+          "RetryDelay": 10,
+          "RetryPolicy": "Fixed",
+          "SupportStatus": "Supported",
+          "Timeout": 300,
+          "TimeoutPolicy": "Timeout"
+        },
+        "RollbackTasks": [],
+        "SharedScope": "user",
+        "Tags": [
+          {
+            "Key": "category",
+            "Value": "Compute"
+          },
+          {
+            "Key": "subcategory",
+            "Value": "Operations"
+          },
+          {
+            "Key": "version",
+            "Value": "5"
+          }
+        ],
+        "Version": 5
+      },
+      "ClassId": "bulk.RestSubRequest",
+      "ObjectType": "bulk.RestSubRequest",
+      "TargetMoid": "",
+      "Uri": "/v1/workflow/TaskDefinitions",
+      "Verb": "POST"
+    },
+    {
+      "Body": {
+        "Batch": [
+          {
+            "Body": "",
+            "ContentType": "json",
+            "Description": "Query LocatorLeds API to find the LED for this server",
+            "Label": "Find Server LocatorLed",
+            "Method": "GET",
+            "Name": "FindLocatorLed",
+            "ObjectType": "workflow.WebApi",
+            "Outcomes": [],
+            "ResponseSpec": {
+              "ErrorParameters": [],
+              "ObjectType": "content.Grammar",
+              "Parameters": [
+                {
+                  "AcceptSingleValue": false,
+                  "ComplexType": "",
+                  "ItemType": "simple",
+                  "Name": "api_response",
+                  "ObjectType": "content.Parameter",
+                  "Path": "$",
+                  "Secure": false,
+                  "Type": "json"
+                },
+                {
+                  "AcceptSingleValue": true,
+                  "ComplexType": "",
+                  "ItemType": "simple",
+                  "Name": "locator_led_moid",
+                  "ObjectType": "content.Parameter",
+                  "Path": "$.Results[0].Moid",
+                  "Secure": false,
+                  "Type": "string"
+                },
+                {
+                  "AcceptSingleValue": true,
+                  "ComplexType": "",
+                  "ItemType": "simple",
+                  "Name": "current_state",
+                  "ObjectType": "content.Parameter",
+                  "Path": "$.Results[0].OperState",
+                  "Secure": false,
+                  "Type": "string"
+                }
+              ],
+              "Types": []
+            },
+            "Url": "/api/v1/equipment/LocatorLeds?$filter=RegisteredDevice.Moid eq '{{.global.task.input.server_moid}}'"
+          },
+          {
+            "Body": "{\n  \"AdminState\": \"{{.global.task.input.led_state}}\"\n}",
+            "ContentType": "json",
+            "Description": "Update the locator LED admin state",
+            "Label": "Set Locator LED",
+            "Method": "PATCH",
+            "Name": "SetLocatorLED",
+            "ObjectType": "workflow.WebApi",
+            "Outcomes": [],
+            "ResponseSpec": {
+              "ErrorParameters": [],
+              "ObjectType": "content.Grammar",
+              "Parameters": [
+                {
+                  "AcceptSingleValue": false,
+                  "ComplexType": "",
+                  "ItemType": "simple",
+                  "Name": "api_response",
+                  "ObjectType": "content.Parameter",
+                  "Path": "$",
+                  "Secure": false,
+                  "Type": "json"
+                },
+                {
+                  "AcceptSingleValue": true,
+                  "ComplexType": "",
+                  "ItemType": "simple",
+                  "Name": "admin_state",
+                  "ObjectType": "content.Parameter",
+                  "Path": "$.AdminState",
+                  "Secure": false,
+                  "Type": "string"
+                },
+                {
+                  "AcceptSingleValue": true,
+                  "ComplexType": "",
+                  "ItemType": "simple",
+                  "Name": "oper_state",
+                  "ObjectType": "content.Parameter",
+                  "Path": "$.OperState",
+                  "Secure": false,
+                  "Type": "string"
+                }
+              ],
+              "Types": []
+            },
+            "Url": "/api/v1/equipment/LocatorLeds/{{.global.FindLocatorLed.output.locator_led_moid}}"
+          }
+        ],
+        "CancelAction": [],
+        "ClassId": "workflow.BatchApiExecutor",
+        "Constraints": {
+          "ObjectType": "workflow.TaskConstraints"
+        },
+        "Description": "Toggles the locator LED on a physical server by querying the LocatorLeds API with a filter - Version 5",
+        "Name": "Toggle Server Locator LED Version5",
+        "ObjectType": "workflow.BatchApiExecutor",
+        "Output": {
+          "locator_led_moid": "{{.global.FindLocatorLed.output.locator_led_moid}}",
+          "result": "Locator LED was {{.global.FindLocatorLed.output.current_state}}, now AdminState set to {{.global.SetLocatorLED.output.admin_state}}, OperState is {{.global.SetLocatorLED.output.oper_state}}",
+          "response": "{{.global.SetLocatorLED.output.api_response}}"
+        },
+        "SharedScope": "user",
+        "TaskDefinition": {
+          "ObjectType": "workflow.TaskDefinition",
+          "Selector": "Name eq 'ToggleServerLocatorLEDVersion5' and Version eq 5"
+        }
+      },
+      "ClassId": "bulk.RestSubRequest",
+      "ObjectType": "bulk.RestSubRequest",
+      "TargetMoid": "",
+      "Uri": "/v1/workflow/BatchApiExecutors",
+      "Verb": "POST"
+    }
+  ]

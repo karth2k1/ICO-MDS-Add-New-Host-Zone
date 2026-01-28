@@ -1,0 +1,226 @@
+[
+  {
+    "Body": {
+      "ClassId": "workflow.WorkflowDefinition",
+      "DefaultVersion": true,
+      "Description": "Workflow to control the locator LED via ServerSettings API - uses Task Version 9",
+      "InputDefinition": [
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "Select the server whose locator LED you want to control",
+          "DisplayMeta": {
+            "InventorySelector": true,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "Target Server",
+          "Name": "target_server_moid",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [
+              {
+                "DisplayAttributes": ["Name", "Serial", "Model", "ManagementMode", "OperPowerState"],
+                "ObjectType": "workflow.MoReferenceProperty",
+                "Selector": "/api/v1/compute/PhysicalSummaries",
+                "SelectorProperty": {
+                  "Method": "GET",
+                  "ObjectType": "workflow.SelectorProperty"
+                },
+                "ValueAttribute": "Moid"
+              }
+            ],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "string"
+          },
+          "Required": true
+        },
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue",
+            "Override": true,
+            "Value": "On"
+          },
+          "Description": "Choose whether to turn the LED on or off",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "Radio"
+          },
+          "Label": "Desired LED State",
+          "Name": "desired_led_state",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [
+                {
+                  "Label": "Turn LED On",
+                  "ObjectType": "workflow.EnumEntry",
+                  "Value": "On"
+                },
+                {
+                  "Label": "Turn LED Off",
+                  "ObjectType": "workflow.EnumEntry",
+                  "Value": "Off"
+                }
+              ],
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "enum"
+          },
+          "Required": true
+        }
+      ],
+      "InputParameterSet": [],
+      "Label": "Control Server Locator LED V3",
+      "Name": "ControlServerLocatorLEDV3",
+      "ObjectType": "workflow.WorkflowDefinition",
+      "OutputDefinition": [
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "Summary of the LED operation",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "Operation Result",
+          "Name": "operation_result",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "string"
+          }
+        },
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "The Moid of the ServerSetting object that was modified",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "ServerSetting Moid",
+          "Name": "setting_moid",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "string"
+          }
+        }
+      ],
+      "OutputParameters": {
+        "operation_result": "${ToggleServerLocatorLEDTask.output.result}",
+        "setting_moid": "${ToggleServerLocatorLEDTask.output.server_setting_moid}"
+      },
+      "Properties": {
+        "EnableDebug": true,
+        "ExternalMeta": false,
+        "ObjectType": "workflow.WorkflowProperties",
+        "SupportStatus": "Supported"
+      },
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "category",
+          "Value": "Compute"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "Operations"
+        },
+        {
+          "Key": "usecase",
+          "Value": "datacenter-operations"
+        },
+        {
+          "Key": "api",
+          "Value": "ServerSettings"
+        }
+      ],
+      "Tasks": [
+        {
+          "Name": "StartTask",
+          "NextTask": "ToggleServerLocatorLEDTask",
+          "ObjectType": "workflow.StartTask"
+        },
+        {
+          "Name": "SuccessEndTask",
+          "ObjectType": "workflow.SuccessEndTask"
+        },
+        {
+          "Name": "FailureEndTask",
+          "ObjectType": "workflow.FailureEndTask"
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Toggles the locator LED using ServerSettings API - Version 9",
+          "InputParameters": {
+            "server_moid": "${workflow.input.target_server_moid}",
+            "led_state": "${workflow.input.desired_led_state}"
+          },
+          "Label": "Toggle Server Locator LED V9",
+          "Name": "ToggleServerLocatorLEDTask",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "SuccessEndTask",
+          "OnFailure": "FailureEndTask",
+          "TaskDefinitionName": "ToggleServerLocatorLEDVersion9",
+          "Version": 9
+        }
+      ],
+      "UiInputFilters": [],
+      "UiRenderingData": {
+        "Positions": [
+          {
+            "Name": "StartTask",
+            "X": 250,
+            "Y": 100
+          },
+          {
+            "Name": "ToggleServerLocatorLEDTask",
+            "X": 250,
+            "Y": 200
+          },
+          {
+            "Name": "SuccessEndTask",
+            "X": 250,
+            "Y": 300
+          },
+          {
+            "Name": "FailureEndTask",
+            "X": 400,
+            "Y": 300
+          }
+        ]
+      },
+      "VariableDefinition": [],
+      "Version": 3
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/WorkflowDefinitions",
+    "Verb": "POST"
+  }
+]

@@ -1,0 +1,2144 @@
+[
+  {
+    "Body": {
+      "ClassId": "workflow.CustomDataTypeDefinition",
+      "Description": "Type definition for VLAN Id (1-4094)",
+      "Label": "VLAN ID Type",
+      "Name": "VlanIdType",
+      "ObjectType": "workflow.CustomDataTypeDefinition",
+      "ParameterSet": [],
+      "Properties": {
+        "ObjectType": "workflow.CustomDataTypeProperties"
+      },
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        }
+      ],
+      "TypeDefinition": [
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "VLAN ID",
+          "Name": "VlanId",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "Max": 4094,
+              "Min": 1,
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "integer"
+          },
+          "Required": true
+        }
+      ]
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/CustomDataTypeDefinitions",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "ClassId": "workflow.TaskDefinition",
+      "DefaultVersion": true,
+      "Description": "Shows VLAN information for a given MDS switch. Used to check if a VLAN exists before operations.",
+      "Label": "Show MDS VLAN Status",
+      "Name": "ShowMDSVlanStatus",
+      "ObjectType": "workflow.TaskDefinition",
+      "Properties": {
+        "ExternalMeta": true,
+        "InputDefinition": [
+          {
+            "CustomDataTypeProperties": {
+              "CatalogMoid": "shared",
+              "CustomDataTypeName": "MDSTargetDataType",
+              "ObjectType": "workflow.CustomDataProperty"
+            },
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "MDS target switch to query VLAN information from",
+            "DisplayMeta": {
+              "InventorySelector": true,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "MDS Switch",
+            "Name": "mds_switch",
+            "ObjectType": "workflow.TargetDataType",
+            "Properties": [],
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "Optional: Specific VLAN ID to query. Leave empty to show all VLANs.",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "VLAN ID - Optional",
+            "Name": "vlan_id",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "Max": 4094,
+                "Min": 1,
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "integer"
+            },
+            "Required": false
+          }
+        ],
+        "ObjectType": "workflow.Properties",
+        "OutputDefinition": [
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "Complete VLAN status response",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "VLAN Status",
+            "Name": "vlan_status",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "json"
+            }
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "Full API response",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Response",
+            "Name": "response",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "json"
+            }
+          }
+        ],
+        "RetryCount": 3,
+        "RetryDelay": 60,
+        "RetryPolicy": "Fixed",
+        "SupportStatus": "Supported",
+        "Timeout": 600,
+        "TimeoutPolicy": "Timeout"
+      },
+      "RollbackTasks": [],
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "MDS"
+        },
+        {
+          "Key": "category",
+          "Value": "Networking"
+        },
+        {
+          "Key": "feature",
+          "Value": "VLAN-Management"
+        }
+      ],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/TaskDefinitions",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "Batch": [
+        {
+          "Body": "{\n  \"ins_api\": {\n    \"version\": \"1.2\",\n    \"type\": \"cli_show\",\n    \"chunk\": \"0\",\n    \"sid\": \"1\",\n    \"input\": \"show vlan{{if .global.task.input.vlan_id}} id {{.global.task.input.vlan_id}}{{end}} | json native\",\n    \"output_format\": \"json\"\n  }\n}",
+          "ContentType": "json",
+          "Description": "Query VLAN information from MDS switch",
+          "EndpointRequestType": "Internal",
+          "Label": "Show VLAN Status",
+          "Method": "POST",
+          "Name": "ShowVlanStatus",
+          "ObjectType": "workflow.WebApi",
+          "Outcomes": [],
+          "Protocol": "https",
+          "ResponseSpec": {
+            "ErrorParameters": [],
+            "ObjectType": "content.Grammar",
+            "Parameters": [
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "api_response",
+                "ObjectType": "content.Parameter",
+                "Path": "$",
+                "Secure": false,
+                "Type": "json"
+              },
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "vlan_info",
+                "ObjectType": "content.Parameter",
+                "Path": "$.ins_api.outputs.output.body",
+                "Secure": false,
+                "Type": "json"
+              }
+            ],
+            "Types": []
+          },
+          "TargetType": "Endpoint",
+          "Url": "/ins"
+        }
+      ],
+      "CancelAction": [],
+      "ClassId": "workflow.BatchApiExecutor",
+      "Constraints": {
+        "ObjectType": "workflow.TaskConstraints"
+      },
+      "Description": "Shows VLAN information for a given MDS switch",
+      "Name": "Show MDS VLAN Status",
+      "ObjectType": "workflow.BatchApiExecutor",
+      "Output": {
+        "vlan_status": "{{.global.ShowVlanStatus.output.vlan_info}}",
+        "response": "{{.global.ShowVlanStatus.output.api_response}}"
+      },
+      "SharedScope": "user",
+      "TaskDefinition": {
+        "ObjectType": "workflow.TaskDefinition",
+        "Selector": "Name eq 'ShowMDSVlanStatus' and Version eq 1"
+      }
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/BatchApiExecutors",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "ClassId": "workflow.TaskDefinition",
+      "DefaultVersion": true,
+      "Description": "Deletes a VLAN from an MDS switch",
+      "Label": "Delete MDS VLAN",
+      "Name": "DeleteMDSVlan",
+      "ObjectType": "workflow.TaskDefinition",
+      "Properties": {
+        "ExternalMeta": true,
+        "InputDefinition": [
+          {
+            "CustomDataTypeProperties": {
+              "CatalogMoid": "shared",
+              "CustomDataTypeName": "MDSTargetDataType",
+              "ObjectType": "workflow.CustomDataProperty"
+            },
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "MDS target switch to delete VLAN from",
+            "DisplayMeta": {
+              "InventorySelector": true,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "MDS Switch",
+            "Name": "mds_switch",
+            "ObjectType": "workflow.TargetDataType",
+            "Properties": [],
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "VLAN ID to delete (1-4094)",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "VLAN ID",
+            "Name": "vlan_id",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "Max": 4094,
+                "Min": 1,
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "integer"
+            },
+            "Required": true
+          }
+        ],
+        "ObjectType": "workflow.Properties",
+        "OutputDefinition": [
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "API response from VLAN deletion",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Response",
+            "Name": "response",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "json"
+            }
+          }
+        ],
+        "RetryCount": 3,
+        "RetryDelay": 60,
+        "RetryPolicy": "Fixed",
+        "SupportStatus": "Supported",
+        "Timeout": 600,
+        "TimeoutPolicy": "Timeout"
+      },
+      "RollbackTasks": [],
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "MDS"
+        },
+        {
+          "Key": "category",
+          "Value": "Networking"
+        },
+        {
+          "Key": "feature",
+          "Value": "VLAN-Management"
+        }
+      ],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/TaskDefinitions",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "Batch": [
+        {
+          "Body": "{\n  \"ins_api\": {\n    \"version\": \"1.2\",\n    \"type\": \"cli_conf\",\n    \"chunk\": \"0\",\n    \"sid\": \"1\",\n    \"input\": \"no vlan {{.global.task.input.vlan_id}}\",\n    \"output_format\": \"json\"\n  }\n}",
+          "ContentType": "json",
+          "Description": "Delete VLAN from MDS switch",
+          "EndpointRequestType": "Internal",
+          "Label": "Delete VLAN",
+          "Method": "POST",
+          "Name": "DeleteVlan",
+          "ObjectType": "workflow.WebApi",
+          "Outcomes": [],
+          "Protocol": "https",
+          "ResponseSpec": {
+            "ErrorParameters": [],
+            "ObjectType": "content.Grammar",
+            "Parameters": [
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "api_response",
+                "ObjectType": "content.Parameter",
+                "Path": "$",
+                "Secure": false,
+                "Type": "json"
+              }
+            ],
+            "Types": []
+          },
+          "TargetType": "Endpoint",
+          "Url": "/ins"
+        }
+      ],
+      "CancelAction": [],
+      "ClassId": "workflow.BatchApiExecutor",
+      "Constraints": {
+        "ObjectType": "workflow.TaskConstraints"
+      },
+      "Description": "Deletes a VLAN from an MDS switch",
+      "Name": "Delete MDS VLAN",
+      "ObjectType": "workflow.BatchApiExecutor",
+      "Output": {
+        "response": "{{.global.DeleteVlan.output.api_response}}"
+      },
+      "SharedScope": "user",
+      "TaskDefinition": {
+        "ObjectType": "workflow.TaskDefinition",
+        "Selector": "Name eq 'DeleteMDSVlan' and Version eq 1"
+      }
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/BatchApiExecutors",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "ClassId": "workflow.TaskDefinition",
+      "DefaultVersion": true,
+      "Description": "Creates a new VLAN on an MDS switch with optional name",
+      "Label": "Create MDS VLAN",
+      "Name": "CreateMDSVlan",
+      "ObjectType": "workflow.TaskDefinition",
+      "Properties": {
+        "ExternalMeta": true,
+        "InputDefinition": [
+          {
+            "CustomDataTypeProperties": {
+              "CatalogMoid": "shared",
+              "CustomDataTypeName": "MDSTargetDataType",
+              "ObjectType": "workflow.CustomDataProperty"
+            },
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "MDS target switch to create VLAN on",
+            "DisplayMeta": {
+              "InventorySelector": true,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "MDS Switch",
+            "Name": "mds_switch",
+            "ObjectType": "workflow.TargetDataType",
+            "Properties": [],
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "VLAN ID to create (1-4094)",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "VLAN ID",
+            "Name": "vlan_id",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "Max": 4094,
+                "Min": 1,
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "integer"
+            },
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "Optional: Name for the VLAN",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "VLAN Name",
+            "Name": "vlan_name",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "Max": 32,
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "string"
+            },
+            "Required": false
+          }
+        ],
+        "ObjectType": "workflow.Properties",
+        "OutputDefinition": [
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "API response from VLAN creation",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Response",
+            "Name": "response",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "json"
+            }
+          }
+        ],
+        "RetryCount": 3,
+        "RetryDelay": 60,
+        "RetryPolicy": "Fixed",
+        "SupportStatus": "Supported",
+        "Timeout": 600,
+        "TimeoutPolicy": "Timeout"
+      },
+      "RollbackTasks": [
+        {
+          "CatalogMoid": "user",
+          "Description": "Rollback: Deletes the created VLAN",
+          "InputParameters": {
+            "mds_switch": "${task.input.mds_switch}",
+            "vlan_id": "${task.input.vlan_id}"
+          },
+          "Name": "DeleteMDSVlan",
+          "ObjectType": "workflow.RollbackTask",
+          "Version": 1
+        }
+      ],
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "MDS"
+        },
+        {
+          "Key": "category",
+          "Value": "Networking"
+        },
+        {
+          "Key": "feature",
+          "Value": "VLAN-Management"
+        }
+      ],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/TaskDefinitions",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "Batch": [
+        {
+          "Body": "{\n  \"ins_api\": {\n    \"version\": \"1.2\",\n    \"type\": \"cli_conf\",\n    \"chunk\": \"0\",\n    \"sid\": \"1\",\n    \"input\": \"vlan {{.global.task.input.vlan_id}}{{if .global.task.input.vlan_name}} ; name {{.global.task.input.vlan_name}}{{end}}\",\n    \"output_format\": \"json\"\n  }\n}",
+          "ContentType": "json",
+          "Description": "Create VLAN with optional name on MDS switch",
+          "EndpointRequestType": "Internal",
+          "Label": "Create VLAN",
+          "Method": "POST",
+          "Name": "CreateVlan",
+          "ObjectType": "workflow.WebApi",
+          "Outcomes": [],
+          "Protocol": "https",
+          "ResponseSpec": {
+            "ErrorParameters": [],
+            "ObjectType": "content.Grammar",
+            "Parameters": [
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "api_response",
+                "ObjectType": "content.Parameter",
+                "Path": "$",
+                "Secure": false,
+                "Type": "json"
+              }
+            ],
+            "Types": []
+          },
+          "TargetType": "Endpoint",
+          "Url": "/ins"
+        }
+      ],
+      "CancelAction": [],
+      "ClassId": "workflow.BatchApiExecutor",
+      "Constraints": {
+        "ObjectType": "workflow.TaskConstraints"
+      },
+      "Description": "Creates a new VLAN on an MDS switch with optional name",
+      "Name": "Create MDS VLAN",
+      "ObjectType": "workflow.BatchApiExecutor",
+      "Output": {
+        "response": "{{.global.CreateVlan.output.api_response}}"
+      },
+      "SharedScope": "user",
+      "TaskDefinition": {
+        "ObjectType": "workflow.TaskDefinition",
+        "Selector": "Name eq 'CreateMDSVlan' and Version eq 1"
+      }
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/BatchApiExecutors",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "ClassId": "workflow.TaskDefinition",
+      "DefaultVersion": true,
+      "Description": "Removes a VLAN from a VLAN Group on an MDS switch",
+      "Label": "Unassign MDS VLAN from Group",
+      "Name": "UnassignMDSVlanFromGroup",
+      "ObjectType": "workflow.TaskDefinition",
+      "Properties": {
+        "ExternalMeta": true,
+        "InputDefinition": [
+          {
+            "CustomDataTypeProperties": {
+              "CatalogMoid": "shared",
+              "CustomDataTypeName": "MDSTargetDataType",
+              "ObjectType": "workflow.CustomDataProperty"
+            },
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "MDS target switch",
+            "DisplayMeta": {
+              "InventorySelector": true,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "MDS Switch",
+            "Name": "mds_switch",
+            "ObjectType": "workflow.TargetDataType",
+            "Properties": [],
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "VLAN ID to remove from group",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "VLAN ID",
+            "Name": "vlan_id",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "Max": 4094,
+                "Min": 1,
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "integer"
+            },
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "Name of the VLAN group",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Group Name",
+            "Name": "group_name",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "Max": 32,
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "string"
+            },
+            "Required": true
+          }
+        ],
+        "ObjectType": "workflow.Properties",
+        "OutputDefinition": [
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "API response",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Response",
+            "Name": "response",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "json"
+            }
+          }
+        ],
+        "RetryCount": 3,
+        "RetryDelay": 60,
+        "RetryPolicy": "Fixed",
+        "SupportStatus": "Supported",
+        "Timeout": 600,
+        "TimeoutPolicy": "Timeout"
+      },
+      "RollbackTasks": [],
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "MDS"
+        },
+        {
+          "Key": "category",
+          "Value": "Networking"
+        },
+        {
+          "Key": "feature",
+          "Value": "VLAN-Management"
+        }
+      ],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/TaskDefinitions",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "Batch": [
+        {
+          "Body": "{\n  \"ins_api\": {\n    \"version\": \"1.2\",\n    \"type\": \"cli_conf\",\n    \"chunk\": \"0\",\n    \"sid\": \"1\",\n    \"input\": \"vlan-group {{.global.task.input.group_name}} ; no vlan {{.global.task.input.vlan_id}}\",\n    \"output_format\": \"json\"\n  }\n}",
+          "ContentType": "json",
+          "Description": "Remove VLAN from group on MDS switch",
+          "EndpointRequestType": "Internal",
+          "Label": "Unassign VLAN from Group",
+          "Method": "POST",
+          "Name": "UnassignVlanFromGroup",
+          "ObjectType": "workflow.WebApi",
+          "Outcomes": [],
+          "Protocol": "https",
+          "ResponseSpec": {
+            "ErrorParameters": [],
+            "ObjectType": "content.Grammar",
+            "Parameters": [
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "api_response",
+                "ObjectType": "content.Parameter",
+                "Path": "$",
+                "Secure": false,
+                "Type": "json"
+              }
+            ],
+            "Types": []
+          },
+          "TargetType": "Endpoint",
+          "Url": "/ins"
+        }
+      ],
+      "CancelAction": [],
+      "ClassId": "workflow.BatchApiExecutor",
+      "Constraints": {
+        "ObjectType": "workflow.TaskConstraints"
+      },
+      "Description": "Removes a VLAN from a VLAN Group on an MDS switch",
+      "Name": "Unassign MDS VLAN from Group",
+      "ObjectType": "workflow.BatchApiExecutor",
+      "Output": {
+        "response": "{{.global.UnassignVlanFromGroup.output.api_response}}"
+      },
+      "SharedScope": "user",
+      "TaskDefinition": {
+        "ObjectType": "workflow.TaskDefinition",
+        "Selector": "Name eq 'UnassignMDSVlanFromGroup' and Version eq 1"
+      }
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/BatchApiExecutors",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "ClassId": "workflow.TaskDefinition",
+      "DefaultVersion": true,
+      "Description": "Assigns a VLAN to a VLAN Group on an MDS switch (for FCoE)",
+      "Label": "Assign MDS VLAN to Group",
+      "Name": "AssignMDSVlanToGroup",
+      "ObjectType": "workflow.TaskDefinition",
+      "Properties": {
+        "ExternalMeta": true,
+        "InputDefinition": [
+          {
+            "CustomDataTypeProperties": {
+              "CatalogMoid": "shared",
+              "CustomDataTypeName": "MDSTargetDataType",
+              "ObjectType": "workflow.CustomDataProperty"
+            },
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "MDS target switch",
+            "DisplayMeta": {
+              "InventorySelector": true,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "MDS Switch",
+            "Name": "mds_switch",
+            "ObjectType": "workflow.TargetDataType",
+            "Properties": [],
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "VLAN ID to assign to group",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "VLAN ID",
+            "Name": "vlan_id",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "Max": 4094,
+                "Min": 1,
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "integer"
+            },
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "Name of the VLAN group",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Group Name",
+            "Name": "group_name",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "Max": 32,
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "string"
+            },
+            "Required": true
+          }
+        ],
+        "ObjectType": "workflow.Properties",
+        "OutputDefinition": [
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "API response",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Response",
+            "Name": "response",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "json"
+            }
+          }
+        ],
+        "RetryCount": 3,
+        "RetryDelay": 60,
+        "RetryPolicy": "Fixed",
+        "SupportStatus": "Supported",
+        "Timeout": 600,
+        "TimeoutPolicy": "Timeout"
+      },
+      "RollbackTasks": [
+        {
+          "CatalogMoid": "user",
+          "Description": "Rollback: Removes VLAN from group",
+          "InputParameters": {
+            "mds_switch": "${task.input.mds_switch}",
+            "vlan_id": "${task.input.vlan_id}",
+            "group_name": "${task.input.group_name}"
+          },
+          "Name": "UnassignMDSVlanFromGroup",
+          "ObjectType": "workflow.RollbackTask",
+          "Version": 1
+        }
+      ],
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "MDS"
+        },
+        {
+          "Key": "category",
+          "Value": "Networking"
+        },
+        {
+          "Key": "feature",
+          "Value": "VLAN-Management"
+        }
+      ],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/TaskDefinitions",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "Batch": [
+        {
+          "Body": "{\n  \"ins_api\": {\n    \"version\": \"1.2\",\n    \"type\": \"cli_conf\",\n    \"chunk\": \"0\",\n    \"sid\": \"1\",\n    \"input\": \"vlan-group {{.global.task.input.group_name}} ; vlan {{.global.task.input.vlan_id}}\",\n    \"output_format\": \"json\"\n  }\n}",
+          "ContentType": "json",
+          "Description": "Assign VLAN to group on MDS switch",
+          "EndpointRequestType": "Internal",
+          "Label": "Assign VLAN to Group",
+          "Method": "POST",
+          "Name": "AssignVlanToGroup",
+          "ObjectType": "workflow.WebApi",
+          "Outcomes": [],
+          "Protocol": "https",
+          "ResponseSpec": {
+            "ErrorParameters": [],
+            "ObjectType": "content.Grammar",
+            "Parameters": [
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "api_response",
+                "ObjectType": "content.Parameter",
+                "Path": "$",
+                "Secure": false,
+                "Type": "json"
+              }
+            ],
+            "Types": []
+          },
+          "TargetType": "Endpoint",
+          "Url": "/ins"
+        }
+      ],
+      "CancelAction": [],
+      "ClassId": "workflow.BatchApiExecutor",
+      "Constraints": {
+        "ObjectType": "workflow.TaskConstraints"
+      },
+      "Description": "Assigns a VLAN to a VLAN Group on an MDS switch",
+      "Name": "Assign MDS VLAN to Group",
+      "ObjectType": "workflow.BatchApiExecutor",
+      "Output": {
+        "response": "{{.global.AssignVlanToGroup.output.api_response}}"
+      },
+      "SharedScope": "user",
+      "TaskDefinition": {
+        "ObjectType": "workflow.TaskDefinition",
+        "Selector": "Name eq 'AssignMDSVlanToGroup' and Version eq 1"
+      }
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/BatchApiExecutors",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "ClassId": "workflow.TaskDefinition",
+      "DefaultVersion": true,
+      "Description": "Disassociates a VSAN from a VLAN on an MDS switch",
+      "Label": "Disassociate MDS VSAN from VLAN",
+      "Name": "DisassociateMDSVsanFromVlan",
+      "ObjectType": "workflow.TaskDefinition",
+      "Properties": {
+        "ExternalMeta": true,
+        "InputDefinition": [
+          {
+            "CustomDataTypeProperties": {
+              "CatalogMoid": "shared",
+              "CustomDataTypeName": "MDSTargetDataType",
+              "ObjectType": "workflow.CustomDataProperty"
+            },
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "MDS target switch",
+            "DisplayMeta": {
+              "InventorySelector": true,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "MDS Switch",
+            "Name": "mds_switch",
+            "ObjectType": "workflow.TargetDataType",
+            "Properties": [],
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "VLAN ID",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "VLAN ID",
+            "Name": "vlan_id",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "Max": 4094,
+                "Min": 1,
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "integer"
+            },
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "DisplayMeta": {
+              "InventorySelector": true,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "VSAN ID",
+            "Name": "vsan_id",
+            "ObjectType": "workflow.CustomDataType",
+            "Properties": {
+              "CatalogMoid": "shared",
+              "CustomDataTypeName": "VsanIdType",
+              "ObjectType": "workflow.CustomDataProperty"
+            },
+            "Required": true
+          }
+        ],
+        "ObjectType": "workflow.Properties",
+        "OutputDefinition": [
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "API response",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Response",
+            "Name": "response",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "json"
+            }
+          }
+        ],
+        "RetryCount": 3,
+        "RetryDelay": 60,
+        "RetryPolicy": "Fixed",
+        "SupportStatus": "Supported",
+        "Timeout": 600,
+        "TimeoutPolicy": "Timeout"
+      },
+      "RollbackTasks": [],
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "MDS"
+        },
+        {
+          "Key": "category",
+          "Value": "Networking"
+        },
+        {
+          "Key": "feature",
+          "Value": "VLAN-Management"
+        }
+      ],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/TaskDefinitions",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "Batch": [
+        {
+          "Body": "{\n  \"ins_api\": {\n    \"version\": \"1.2\",\n    \"type\": \"cli_conf\",\n    \"chunk\": \"0\",\n    \"sid\": \"1\",\n    \"input\": \"no fcoe vlan {{.global.task.input.vlan_id}} vsan {{.global.task.input.vsan_id}}\",\n    \"output_format\": \"json\"\n  }\n}",
+          "ContentType": "json",
+          "Description": "Disassociate VSAN from VLAN",
+          "EndpointRequestType": "Internal",
+          "Label": "Disassociate VSAN from VLAN",
+          "Method": "POST",
+          "Name": "DisassociateVsanFromVlan",
+          "ObjectType": "workflow.WebApi",
+          "Outcomes": [],
+          "Protocol": "https",
+          "ResponseSpec": {
+            "ErrorParameters": [],
+            "ObjectType": "content.Grammar",
+            "Parameters": [
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "api_response",
+                "ObjectType": "content.Parameter",
+                "Path": "$",
+                "Secure": false,
+                "Type": "json"
+              }
+            ],
+            "Types": []
+          },
+          "TargetType": "Endpoint",
+          "Url": "/ins"
+        }
+      ],
+      "CancelAction": [],
+      "ClassId": "workflow.BatchApiExecutor",
+      "Constraints": {
+        "ObjectType": "workflow.TaskConstraints"
+      },
+      "Description": "Disassociates a VSAN from a VLAN on an MDS switch",
+      "Name": "Disassociate MDS VSAN from VLAN",
+      "ObjectType": "workflow.BatchApiExecutor",
+      "Output": {
+        "response": "{{.global.DisassociateVsanFromVlan.output.api_response}}"
+      },
+      "SharedScope": "user",
+      "TaskDefinition": {
+        "ObjectType": "workflow.TaskDefinition",
+        "Selector": "Name eq 'DisassociateMDSVsanFromVlan' and Version eq 1"
+      }
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/BatchApiExecutors",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "ClassId": "workflow.TaskDefinition",
+      "DefaultVersion": true,
+      "Description": "Associates a VSAN to a VLAN for FCoE on an MDS switch",
+      "Label": "Associate MDS VSAN to VLAN",
+      "Name": "AssociateMDSVsanToVlan",
+      "ObjectType": "workflow.TaskDefinition",
+      "Properties": {
+        "ExternalMeta": true,
+        "InputDefinition": [
+          {
+            "CustomDataTypeProperties": {
+              "CatalogMoid": "shared",
+              "CustomDataTypeName": "MDSTargetDataType",
+              "ObjectType": "workflow.CustomDataProperty"
+            },
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "MDS target switch",
+            "DisplayMeta": {
+              "InventorySelector": true,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "MDS Switch",
+            "Name": "mds_switch",
+            "ObjectType": "workflow.TargetDataType",
+            "Properties": [],
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "VLAN ID for FCoE mapping",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "VLAN ID",
+            "Name": "vlan_id",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "Max": 4094,
+                "Min": 1,
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "integer"
+            },
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "DisplayMeta": {
+              "InventorySelector": true,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "VSAN ID",
+            "Name": "vsan_id",
+            "ObjectType": "workflow.CustomDataType",
+            "Properties": {
+              "CatalogMoid": "shared",
+              "CustomDataTypeName": "VsanIdType",
+              "ObjectType": "workflow.CustomDataProperty"
+            },
+            "Required": true
+          }
+        ],
+        "ObjectType": "workflow.Properties",
+        "OutputDefinition": [
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "API response",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Response",
+            "Name": "response",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "json"
+            }
+          }
+        ],
+        "RetryCount": 3,
+        "RetryDelay": 60,
+        "RetryPolicy": "Fixed",
+        "SupportStatus": "Supported",
+        "Timeout": 600,
+        "TimeoutPolicy": "Timeout"
+      },
+      "RollbackTasks": [
+        {
+          "CatalogMoid": "user",
+          "Description": "Rollback: Disassociates VSAN from VLAN",
+          "InputParameters": {
+            "mds_switch": "${task.input.mds_switch}",
+            "vlan_id": "${task.input.vlan_id}",
+            "vsan_id": "${task.input.vsan_id}"
+          },
+          "Name": "DisassociateMDSVsanFromVlan",
+          "ObjectType": "workflow.RollbackTask",
+          "Version": 1
+        }
+      ],
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "MDS"
+        },
+        {
+          "Key": "category",
+          "Value": "Networking"
+        },
+        {
+          "Key": "feature",
+          "Value": "VLAN-Management"
+        }
+      ],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/TaskDefinitions",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "Batch": [
+        {
+          "Body": "{\n  \"ins_api\": {\n    \"version\": \"1.2\",\n    \"type\": \"cli_conf\",\n    \"chunk\": \"0\",\n    \"sid\": \"1\",\n    \"input\": \"fcoe vlan {{.global.task.input.vlan_id}} vsan {{.global.task.input.vsan_id}}\",\n    \"output_format\": \"json\"\n  }\n}",
+          "ContentType": "json",
+          "Description": "Associate VSAN to VLAN for FCoE",
+          "EndpointRequestType": "Internal",
+          "Label": "Associate VSAN to VLAN",
+          "Method": "POST",
+          "Name": "AssociateVsanToVlan",
+          "ObjectType": "workflow.WebApi",
+          "Outcomes": [],
+          "Protocol": "https",
+          "ResponseSpec": {
+            "ErrorParameters": [],
+            "ObjectType": "content.Grammar",
+            "Parameters": [
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "api_response",
+                "ObjectType": "content.Parameter",
+                "Path": "$",
+                "Secure": false,
+                "Type": "json"
+              }
+            ],
+            "Types": []
+          },
+          "TargetType": "Endpoint",
+          "Url": "/ins"
+        }
+      ],
+      "CancelAction": [],
+      "ClassId": "workflow.BatchApiExecutor",
+      "Constraints": {
+        "ObjectType": "workflow.TaskConstraints"
+      },
+      "Description": "Associates a VSAN to a VLAN for FCoE on an MDS switch",
+      "Name": "Associate MDS VSAN to VLAN",
+      "ObjectType": "workflow.BatchApiExecutor",
+      "Output": {
+        "response": "{{.global.AssociateVsanToVlan.output.api_response}}"
+      },
+      "SharedScope": "user",
+      "TaskDefinition": {
+        "ObjectType": "workflow.TaskDefinition",
+        "Selector": "Name eq 'AssociateMDSVsanToVlan' and Version eq 1"
+      }
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/BatchApiExecutors",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "ClassId": "workflow.WorkflowDefinition",
+      "DefaultVersion": true,
+      "Description": "Provisions a complete tenant VLAN setup: creates VLAN, assigns to group, and associates with VSAN. Supports rollback on failure.",
+      "InputDefinition": [
+        {
+          "CustomDataTypeProperties": {
+            "CatalogMoid": "shared",
+            "CustomDataTypeName": "MDSTargetDataType",
+            "ObjectType": "workflow.CustomDataProperty"
+          },
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "MDS switch to configure",
+          "DisplayMeta": {
+            "InventorySelector": true,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "MDS Switch",
+          "Name": "mds_switch",
+          "ObjectType": "workflow.TargetDataType",
+          "Properties": [],
+          "Required": true
+        },
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "VLAN ID to create (1-4094)",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "VLAN ID",
+          "Name": "vlan_id",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "Max": 4094,
+              "Min": 1,
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "integer"
+          },
+          "Required": true
+        },
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "Name for the VLAN (e.g., Tenant-A-Mgmt)",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "VLAN Name",
+          "Name": "vlan_name",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "Max": 32,
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "string"
+          },
+          "Required": true
+        },
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "VLAN Group name for organization",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "Group Name",
+          "Name": "group_name",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "Max": 32,
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "string"
+          },
+          "Required": true
+        },
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "DisplayMeta": {
+            "InventorySelector": true,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "VSAN ID",
+          "Name": "vsan_id",
+          "ObjectType": "workflow.CustomDataType",
+          "Properties": {
+            "CatalogMoid": "shared",
+            "CustomDataTypeName": "VsanIdType",
+            "ObjectType": "workflow.CustomDataProperty"
+          },
+          "Required": true
+        },
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue",
+            "Override": true,
+            "Value": true
+          },
+          "Description": "If true, check if VLAN exists before creation. Skip creation if exists.",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "Skip if VLAN Exists",
+          "Name": "skip_if_exists",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "boolean"
+          },
+          "Required": false
+        }
+      ],
+      "InputParameterSet": [],
+      "Label": "Provision Tenant VLAN with VSAN Association",
+      "Name": "ProvisionTenantVlanWithVsan",
+      "ObjectType": "workflow.WorkflowDefinition",
+      "OutputDefinition": [
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "Summary of provisioning result",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "Provisioning Result",
+          "Name": "result",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "string"
+          }
+        }
+      ],
+      "OutputParameters": {
+        "result": "VLAN ${workflow.input.vlan_id} (${workflow.input.vlan_name}) provisioned successfully. Assigned to group '${workflow.input.group_name}' and associated with VSAN ${workflow.input.vsan_id}."
+      },
+      "Properties": {
+        "EnableDebug": true,
+        "ExternalMeta": true,
+        "ObjectType": "workflow.WorkflowProperties",
+        "SupportStatus": "Supported"
+      },
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "usecase",
+          "Value": "multi-tenant"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "MDS"
+        },
+        {
+          "Key": "category",
+          "Value": "Networking"
+        },
+        {
+          "Key": "feature",
+          "Value": "VLAN-Management"
+        }
+      ],
+      "Tasks": [
+        {
+          "Name": "StartTask",
+          "NextTask": "CheckVlanExists",
+          "ObjectType": "workflow.StartTask"
+        },
+        {
+          "Name": "SuccessEndTask",
+          "ObjectType": "workflow.SuccessEndTask"
+        },
+        {
+          "Name": "FailureEndTask",
+          "ObjectType": "workflow.FailureEndTask"
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Check if VLAN already exists on the switch",
+          "InputParameters": {
+            "mds_switch": "${workflow.input.mds_switch}",
+            "vlan_id": "${workflow.input.vlan_id}"
+          },
+          "Label": "Check VLAN Exists",
+          "Name": "CheckVlanExists",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "VlanExistsDecision",
+          "OnFailure": "CreateVlan",
+          "TaskDefinitionName": "ShowMDSVlanStatus",
+          "Version": 1
+        },
+        {
+          "Condition": "${workflow.input.skip_if_exists}",
+          "DecisionCases": [
+            {
+              "Description": "Skip creation, VLAN exists and skip_if_exists is true",
+              "NextTask": "AssignVlanToGroup",
+              "ObjectType": "workflow.DecisionCase",
+              "Value": "true"
+            },
+            {
+              "Description": "Proceed with creation even if exists (will update)",
+              "NextTask": "CreateVlan",
+              "ObjectType": "workflow.DecisionCase",
+              "Value": "false"
+            }
+          ],
+          "DefaultTask": "AssignVlanToGroup",
+          "Description": "Decide whether to skip VLAN creation if it already exists",
+          "Label": "VLAN Exists Decision",
+          "Name": "VlanExistsDecision",
+          "ObjectType": "workflow.DecisionTask"
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Create the VLAN on the MDS switch",
+          "InputParameters": {
+            "mds_switch": "${workflow.input.mds_switch}",
+            "vlan_id": "${workflow.input.vlan_id}",
+            "vlan_name": "${workflow.input.vlan_name}"
+          },
+          "Label": "Create VLAN",
+          "Name": "CreateVlan",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "SleepAfterCreate",
+          "OnFailure": "FailureEndTask",
+          "TaskDefinitionName": "CreateMDSVlan",
+          "Version": 1
+        },
+        {
+          "CatalogMoid": "shared",
+          "Description": "Brief pause after VLAN creation",
+          "InputParameters": {
+            "SleepTimeInSec": 2
+          },
+          "Label": "Sleep After Create",
+          "Name": "SleepAfterCreate",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "AssignVlanToGroup",
+          "TaskDefinitionName": "InvokeSleepTask",
+          "Version": 1
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Assign the VLAN to the specified group",
+          "InputParameters": {
+            "mds_switch": "${workflow.input.mds_switch}",
+            "vlan_id": "${workflow.input.vlan_id}",
+            "group_name": "${workflow.input.group_name}"
+          },
+          "Label": "Assign VLAN to Group",
+          "Name": "AssignVlanToGroup",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "SleepAfterAssign",
+          "OnFailure": "FailureEndTask",
+          "TaskDefinitionName": "AssignMDSVlanToGroup",
+          "Version": 1
+        },
+        {
+          "CatalogMoid": "shared",
+          "Description": "Brief pause after group assignment",
+          "InputParameters": {
+            "SleepTimeInSec": 2
+          },
+          "Label": "Sleep After Assign",
+          "Name": "SleepAfterAssign",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "AssociateVsanToVlan",
+          "TaskDefinitionName": "InvokeSleepTask",
+          "Version": 1
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Associate the VSAN to the VLAN for FCoE",
+          "InputParameters": {
+            "mds_switch": "${workflow.input.mds_switch}",
+            "vlan_id": "${workflow.input.vlan_id}",
+            "vsan_id": "${workflow.input.vsan_id}"
+          },
+          "Label": "Associate VSAN to VLAN",
+          "Name": "AssociateVsanToVlan",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "SaveConfig",
+          "OnFailure": "FailureEndTask",
+          "TaskDefinitionName": "AssociateMDSVsanToVlan",
+          "Version": 1
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Save running config to startup",
+          "InputParameters": {
+            "mds_switch": "${workflow.input.mds_switch}"
+          },
+          "Label": "Save Configuration",
+          "Name": "SaveConfig",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "SuccessEndTask",
+          "OnFailure": "FailureEndTask",
+          "TaskDefinitionName": "SaveMDSConfiguration",
+          "Version": 1
+        }
+      ],
+      "UiInputFilters": [],
+      "UiRenderingData": {
+        "Positions": [
+          {"Name": "StartTask", "X": 300, "Y": 50},
+          {"Name": "CheckVlanExists", "X": 300, "Y": 150},
+          {"Name": "VlanExistsDecision", "X": 300, "Y": 250},
+          {"Name": "CreateVlan", "X": 500, "Y": 250},
+          {"Name": "SleepAfterCreate", "X": 500, "Y": 350},
+          {"Name": "AssignVlanToGroup", "X": 300, "Y": 450},
+          {"Name": "SleepAfterAssign", "X": 300, "Y": 550},
+          {"Name": "AssociateVsanToVlan", "X": 300, "Y": 650},
+          {"Name": "SaveConfig", "X": 300, "Y": 750},
+          {"Name": "SuccessEndTask", "X": 300, "Y": 850},
+          {"Name": "FailureEndTask", "X": 500, "Y": 850}
+        ]
+      },
+      "VariableDefinition": [],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/WorkflowDefinitions",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "ClassId": "workflow.WorkflowDefinition",
+      "DefaultVersion": true,
+      "Description": "Deprovisions a tenant VLAN: removes VSAN association, removes from group, and deletes VLAN.",
+      "InputDefinition": [
+        {
+          "CustomDataTypeProperties": {
+            "CatalogMoid": "shared",
+            "CustomDataTypeName": "MDSTargetDataType",
+            "ObjectType": "workflow.CustomDataProperty"
+          },
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "MDS switch to configure",
+          "DisplayMeta": {
+            "InventorySelector": true,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "MDS Switch",
+          "Name": "mds_switch",
+          "ObjectType": "workflow.TargetDataType",
+          "Properties": [],
+          "Required": true
+        },
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "VLAN ID to delete (1-4094)",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "VLAN ID",
+          "Name": "vlan_id",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "Max": 4094,
+              "Min": 1,
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "integer"
+          },
+          "Required": true
+        },
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "VLAN Group name",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "Group Name",
+          "Name": "group_name",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "Max": 32,
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "string"
+          },
+          "Required": true
+        },
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "DisplayMeta": {
+            "InventorySelector": true,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "VSAN ID",
+          "Name": "vsan_id",
+          "ObjectType": "workflow.CustomDataType",
+          "Properties": {
+            "CatalogMoid": "shared",
+            "CustomDataTypeName": "VsanIdType",
+            "ObjectType": "workflow.CustomDataProperty"
+          },
+          "Required": true
+        }
+      ],
+      "InputParameterSet": [],
+      "Label": "Deprovision Tenant VLAN",
+      "Name": "DeprovisionTenantVlan",
+      "ObjectType": "workflow.WorkflowDefinition",
+      "OutputDefinition": [
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "Summary of deprovisioning result",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "Deprovisioning Result",
+          "Name": "result",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "string"
+          }
+        }
+      ],
+      "OutputParameters": {
+        "result": "VLAN ${workflow.input.vlan_id} deprovisioned successfully. Removed from group '${workflow.input.group_name}' and disassociated from VSAN ${workflow.input.vsan_id}."
+      },
+      "Properties": {
+        "EnableDebug": true,
+        "ExternalMeta": true,
+        "ObjectType": "workflow.WorkflowProperties",
+        "SupportStatus": "Supported"
+      },
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "usecase",
+          "Value": "multi-tenant"
+        },
+        {
+          "Key": "subcategory",
+          "Value": "MDS"
+        },
+        {
+          "Key": "category",
+          "Value": "Networking"
+        },
+        {
+          "Key": "feature",
+          "Value": "VLAN-Management"
+        }
+      ],
+      "Tasks": [
+        {
+          "Name": "StartTask",
+          "NextTask": "DisassociateVsanFromVlan",
+          "ObjectType": "workflow.StartTask"
+        },
+        {
+          "Name": "SuccessEndTask",
+          "ObjectType": "workflow.SuccessEndTask"
+        },
+        {
+          "Name": "FailureEndTask",
+          "ObjectType": "workflow.FailureEndTask"
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Remove VSAN association from VLAN",
+          "InputParameters": {
+            "mds_switch": "${workflow.input.mds_switch}",
+            "vlan_id": "${workflow.input.vlan_id}",
+            "vsan_id": "${workflow.input.vsan_id}"
+          },
+          "Label": "Disassociate VSAN from VLAN",
+          "Name": "DisassociateVsanFromVlan",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "SleepAfterDisassociate",
+          "OnFailure": "FailureEndTask",
+          "TaskDefinitionName": "DisassociateMDSVsanFromVlan",
+          "Version": 1
+        },
+        {
+          "CatalogMoid": "shared",
+          "Description": "Brief pause",
+          "InputParameters": {
+            "SleepTimeInSec": 2
+          },
+          "Label": "Sleep After Disassociate",
+          "Name": "SleepAfterDisassociate",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "UnassignVlanFromGroup",
+          "TaskDefinitionName": "InvokeSleepTask",
+          "Version": 1
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Remove VLAN from group",
+          "InputParameters": {
+            "mds_switch": "${workflow.input.mds_switch}",
+            "vlan_id": "${workflow.input.vlan_id}",
+            "group_name": "${workflow.input.group_name}"
+          },
+          "Label": "Unassign VLAN from Group",
+          "Name": "UnassignVlanFromGroup",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "SleepAfterUnassign",
+          "OnFailure": "FailureEndTask",
+          "TaskDefinitionName": "UnassignMDSVlanFromGroup",
+          "Version": 1
+        },
+        {
+          "CatalogMoid": "shared",
+          "Description": "Brief pause",
+          "InputParameters": {
+            "SleepTimeInSec": 2
+          },
+          "Label": "Sleep After Unassign",
+          "Name": "SleepAfterUnassign",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "DeleteVlan",
+          "TaskDefinitionName": "InvokeSleepTask",
+          "Version": 1
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Delete the VLAN",
+          "InputParameters": {
+            "mds_switch": "${workflow.input.mds_switch}",
+            "vlan_id": "${workflow.input.vlan_id}"
+          },
+          "Label": "Delete VLAN",
+          "Name": "DeleteVlan",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "SaveConfig",
+          "OnFailure": "FailureEndTask",
+          "TaskDefinitionName": "DeleteMDSVlan",
+          "Version": 1
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Save running config to startup",
+          "InputParameters": {
+            "mds_switch": "${workflow.input.mds_switch}"
+          },
+          "Label": "Save Configuration",
+          "Name": "SaveConfig",
+          "ObjectType": "workflow.WorkerTask",
+          "OnSuccess": "SuccessEndTask",
+          "OnFailure": "FailureEndTask",
+          "TaskDefinitionName": "SaveMDSConfiguration",
+          "Version": 1
+        }
+      ],
+      "UiInputFilters": [],
+      "UiRenderingData": {
+        "Positions": [
+          {"Name": "StartTask", "X": 300, "Y": 50},
+          {"Name": "DisassociateVsanFromVlan", "X": 300, "Y": 150},
+          {"Name": "SleepAfterDisassociate", "X": 300, "Y": 250},
+          {"Name": "UnassignVlanFromGroup", "X": 300, "Y": 350},
+          {"Name": "SleepAfterUnassign", "X": 300, "Y": 450},
+          {"Name": "DeleteVlan", "X": 300, "Y": 550},
+          {"Name": "SaveConfig", "X": 300, "Y": 650},
+          {"Name": "SuccessEndTask", "X": 300, "Y": 750},
+          {"Name": "FailureEndTask", "X": 500, "Y": 750}
+        ]
+      },
+      "VariableDefinition": [],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/WorkflowDefinitions",
+    "Verb": "POST"
+  }
+]

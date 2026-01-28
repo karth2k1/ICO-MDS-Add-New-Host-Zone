@@ -1,0 +1,244 @@
+[
+    {
+      "Body": {
+        "ClassId": "workflow.TaskDefinition",
+        "DefaultVersion": true,
+        "Description": "Retrieves a list of all physical compute servers managed by Intersight",
+        "Label": "Get Server Inventory",
+        "Name": "GetServerInventory",
+        "ObjectType": "workflow.TaskDefinition",
+        "Properties": {
+          "ExternalMeta": false,
+          "InputDefinition": [
+            {
+              "Default": {
+                "ObjectType": "workflow.DefaultValue",
+                "Override": true,
+                "Value": 100
+              },
+              "Description": "Maximum number of servers to return",
+              "DisplayMeta": {
+                "InventorySelector": false,
+                "ObjectType": "workflow.DisplayMeta",
+                "WidgetType": "None"
+              },
+              "Label": "Top Results",
+              "Name": "top",
+              "ObjectType": "workflow.PrimitiveDataType",
+              "Properties": {
+                "Constraints": {
+                  "EnumList": [],
+                  "Max": 1000,
+                  "Min": 1,
+                  "ObjectType": "workflow.Constraints"
+                },
+                "InventorySelector": [],
+                "ObjectType": "workflow.PrimitiveDataProperty",
+                "Type": "integer"
+              },
+              "Required": false
+            },
+            {
+              "Default": {
+                "ObjectType": "workflow.DefaultValue",
+                "Override": true,
+                "Value": ""
+              },
+              "Description": "Optional OData filter (e.g., ManagementMode eq 'Intersight')",
+              "DisplayMeta": {
+                "InventorySelector": false,
+                "ObjectType": "workflow.DisplayMeta",
+                "WidgetType": "None"
+              },
+              "Label": "Filter",
+              "Name": "filter",
+              "ObjectType": "workflow.PrimitiveDataType",
+              "Properties": {
+                "Constraints": {
+                  "EnumList": [],
+                  "ObjectType": "workflow.Constraints"
+                },
+                "InventorySelector": [],
+                "ObjectType": "workflow.PrimitiveDataProperty",
+                "Type": "string"
+              },
+              "Required": false
+            }
+          ],
+          "ObjectType": "workflow.Properties",
+          "OutputDefinition": [
+            {
+              "Default": {
+                "ObjectType": "workflow.DefaultValue"
+              },
+              "Description": "Total number of servers found",
+              "DisplayMeta": {
+                "InventorySelector": false,
+                "ObjectType": "workflow.DisplayMeta",
+                "WidgetType": "None"
+              },
+              "Label": "Server Count",
+              "Name": "server_count",
+              "ObjectType": "workflow.PrimitiveDataType",
+              "Properties": {
+                "Constraints": {
+                  "EnumList": [],
+                  "ObjectType": "workflow.Constraints"
+                },
+                "InventorySelector": [],
+                "ObjectType": "workflow.PrimitiveDataProperty",
+                "Type": "integer"
+              }
+            },
+            {
+              "Default": {
+                "ObjectType": "workflow.DefaultValue"
+              },
+              "Description": "List of all server details",
+              "DisplayMeta": {
+                "InventorySelector": false,
+                "ObjectType": "workflow.DisplayMeta",
+                "WidgetType": "None"
+              },
+              "Label": "Servers",
+              "Name": "servers",
+              "ObjectType": "workflow.PrimitiveDataType",
+              "Properties": {
+                "Constraints": {
+                  "EnumList": [],
+                  "ObjectType": "workflow.Constraints"
+                },
+                "InventorySelector": [],
+                "ObjectType": "workflow.PrimitiveDataProperty",
+                "Type": "json"
+              }
+            },
+            {
+              "Default": {
+                "ObjectType": "workflow.DefaultValue"
+              },
+              "Description": "Complete API response",
+              "DisplayMeta": {
+                "InventorySelector": false,
+                "ObjectType": "workflow.DisplayMeta",
+                "WidgetType": "None"
+              },
+              "Label": "Full Response",
+              "Name": "full_response",
+              "ObjectType": "workflow.PrimitiveDataType",
+              "Properties": {
+                "Constraints": {
+                  "EnumList": [],
+                  "ObjectType": "workflow.Constraints"
+                },
+                "InventorySelector": [],
+                "ObjectType": "workflow.PrimitiveDataProperty",
+                "Type": "json"
+              }
+            }
+          ],
+          "RetryCount": 3,
+          "RetryDelay": 10,
+          "RetryPolicy": "Fixed",
+          "SupportStatus": "Supported",
+          "Timeout": 300,
+          "TimeoutPolicy": "Timeout"
+        },
+        "RollbackTasks": [],
+        "SharedScope": "user",
+        "Tags": [
+          {
+            "Key": "category",
+            "Value": "Compute"
+          },
+          {
+            "Key": "subcategory",
+            "Value": "Inventory"
+          }
+        ],
+        "Version": 1
+      },
+      "ClassId": "bulk.RestSubRequest",
+      "ObjectType": "bulk.RestSubRequest",
+      "TargetMoid": "",
+      "Uri": "/v1/workflow/TaskDefinitions",
+      "Verb": "POST"
+    },
+    {
+      "Body": {
+        "Batch": [
+            {
+                "Body": "",
+                "ContentType": "json",
+                "Description": "Retrieve compute physical summaries from Intersight API",
+                "Label": "Get Server List",
+                "Method": "GET",
+                "Name": "GetServers",
+                "ObjectType": "workflow.WebApi",
+                "Outcomes": [],
+                "ResponseSpec": {
+                  "ErrorParameters": [],
+                  "ObjectType": "content.Grammar",
+                  "Parameters": [
+                    {
+                      "AcceptSingleValue": false,
+                      "ComplexType": "",
+                      "ItemType": "simple",
+                      "Name": "api_response",
+                      "ObjectType": "content.Parameter",
+                      "Path": "$",
+                      "Secure": false,
+                      "Type": "json"
+                    },
+                    {
+                      "AcceptSingleValue": false,
+                      "ComplexType": "",
+                      "ItemType": "simple",
+                      "Name": "server_list",
+                      "ObjectType": "content.Parameter",
+                      "Path": "$.Results",
+                      "Secure": false,
+                      "Type": "json"
+                    },
+                    {
+                      "AcceptSingleValue": true,
+                      "ComplexType": "",
+                      "ItemType": "simple",
+                      "Name": "count",
+                      "ObjectType": "content.Parameter",
+                      "Path": "$.Count",
+                      "Secure": false,
+                      "Type": "integer"
+                    }
+                  ],
+                  "Types": []
+                },
+                "Url": "/api/v1/compute/PhysicalSummaries?$top={{.global.task.input.top}}{{if .global.task.input.filter}}&$filter={{.global.task.input.filter}}{{end}}"
+              }
+        ],
+        "CancelAction": [],
+        "ClassId": "workflow.BatchApiExecutor",
+        "Constraints": {
+          "ObjectType": "workflow.TaskConstraints"
+        },
+        "Description": "Retrieves a list of all physical compute servers managed by Intersight",
+        "Name": "Get Server Inventory",
+        "ObjectType": "workflow.BatchApiExecutor",
+        "Output": {
+          "server_count": "{{.global.GetServers.output.count}}",
+          "servers": "{{.global.GetServers.output.server_list}}",
+          "full_response": "{{.global.GetServers.output.api_response}}"
+        },
+        "SharedScope": "user",
+        "TaskDefinition": {
+          "ObjectType": "workflow.TaskDefinition",
+          "Selector": "Name eq 'GetServerInventory' and Version eq 1"
+        }
+      },
+      "ClassId": "bulk.RestSubRequest",
+      "ObjectType": "bulk.RestSubRequest",
+      "TargetMoid": "",
+      "Uri": "/v1/workflow/BatchApiExecutors",
+      "Verb": "POST"
+    }
+  ]

@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Generate Workflow - ICO Workflow Generator{% endblock %}
+
+{% block content %}
+<div class="generator-container">
+    <div class="input-section">
+        <h2>JIRA Requirements Input</h2>
+        <p class="description">Paste your JIRA ticket content below. The system will analyze the requirements and generate a valid Intersight Cloud Orchestrator workflow.</p>
+        
+        <form id="generate-form" method="POST">
+            <div class="form-group">
+                <label for="jira_text">JIRA Requirements:</label>
+                <textarea 
+                    id="jira_text" 
+                    name="jira_text" 
+                    rows="12" 
+                    placeholder="Example:
+Add new host server-01 to SAN Fabric A and B
+
+Host Details:
+- Hostname: server-01
+- Fabric A WWPN: 20:00:00:25:b5:01:00:01
+- Fabric B WWPN: 20:00:00:25:b5:01:00:02
+- VSAN: 100
+- Zone Name: server-01-zone
+
+Actions required:
+1. Create device alias for the host WWPNs
+2. Create zone and add the host
+3. Add zone to active zoneset
+4. Activate zoneset and commit
+5. Save configuration"
+                ></textarea>
+            </div>
+            
+            <div class="button-group">
+                <button type="submit" class="btn btn-primary" id="generate-btn">
+                    <span class="btn-text">Generate Workflow</span>
+                    <span class="btn-loading" style="display: none;">Generating...</span>
+                </button>
+                <button type="button" class="btn btn-secondary" id="clear-btn">Clear</button>
+            </div>
+        </form>
+
+        <div id="error-container" class="error-message" style="display: none;"></div>
+    </div>
+
+    <div class="output-section" id="output-section" style="display: none;">
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="preview">Preview</button>
+            <button class="tab-btn" data-tab="diagram">Diagram</button>
+            <button class="tab-btn" data-tab="json">JSON</button>
+            <button class="tab-btn" data-tab="validation">Validation</button>
+        </div>
+
+        <div class="tab-content" id="preview-tab">
+            <h3>Workflow Preview</h3>
+            <div id="preview-content"></div>
+        </div>
+
+        <div class="tab-content" id="diagram-tab" style="display: none;">
+            <h3>Workflow Diagram</h3>
+            <div id="mermaid-container" class="mermaid-diagram"></div>
+        </div>
+
+        <div class="tab-content" id="json-tab" style="display: none;">
+            <h3>Generated JSON</h3>
+            <div class="json-actions">
+                <button class="btn btn-small" id="copy-json-btn">Copy to Clipboard</button>
+                <button class="btn btn-small btn-primary" id="download-json-btn">Download JSON</button>
+            </div>
+            <pre id="json-content" class="json-preview"></pre>
+        </div>
+
+        <div class="tab-content" id="validation-tab" style="display: none;">
+            <h3>Validation Results</h3>
+            <div id="validation-content"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Store the generated workflow data
+    let generatedWorkflow = null;
+
+    // Form submission handler
+    document.getElementById('generate-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const jiraText = document.getElementById('jira_text').value;
+        const generateBtn = document.getElementById('generate-btn');
+        const errorContainer = document.getElementById('error-container');
+        const outputSection = document.getElementById('output-section');
+        
+        // Reset state
+        errorContainer.style.display = 'none';
+        generateBtn.querySelector('.btn-text').style.display = 'none';
+        generateBtn.querySelector('.btn-loading').style.display = 'inline';
+        generateBtn.disabled = true;
+        
+        try {
+            const formData = new FormData();
+            formData.append('jira_text', jiraText);
+            
+            const response = await fetch('/generate', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to generate workflow');
+            }
+            
+            // Store the workflow
+            generatedWorkflow = data.workflow;
+            
+            // Update preview tab
+            updatePreview(data);
+            
+            // Update diagram tab
+            updateDiagram(data.mermaid);
+            
+            // Update JSON tab
+            updateJsonView(data.workflow);
+            
+            // Update validation tab
+            updateValidation(data.validation);
+            
+            // Show output section
+            outputSection.style.display = 'block';
+            
+        } catch (error) {
+            errorContainer.textContent = error.message;
+            errorContainer.style.display = 'block';
+            outputSection.style.display = 'none';
+        } finally {
+            generateBtn.querySelector('.btn-text').style.display = 'inline';
+            generateBtn.querySelector('.btn-loading').style.display = 'none';
+            generateBtn.disabled = false;
+        }
+    });
+
+    // Clear button handler
+    document.getElementById('clear-btn').addEventListener('click', function() {
+        document.getElementById('jira_text').value = '';
+        document.getElementById('output-section').style.display = 'none';
+        document.getElementById('error-container').style.display = 'none';
+        generatedWorkflow = null;
+    });
+
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabId = this.dataset.tab;
+            
+            // Update active tab button
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Show corresponding content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            document.getElementById(tabId + '-tab').style.display = 'block';
+        });
+    });
+
+    // Copy JSON button
+    document.getElementById('copy-json-btn').addEventListener('click', function() {
+        if (generatedWorkflow) {
+            navigator.clipboard.writeText(JSON.stringify(generatedWorkflow, null, 2))
+                .then(() => {
+                    this.textContent = 'Copied!';
+                    setTimeout(() => { this.textContent = 'Copy to Clipboard'; }, 2000);
+                });
+        }
+    });
+
+    // Download JSON button
+    document.getElementById('download-json-btn').addEventListener('click', async function() {
+        if (generatedWorkflow) {
+            const response = await fetch('/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ workflow: generatedWorkflow })
+            });
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'intersight_workflow.json';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+        }
+    });
+
+    function updatePreview(data) {
+        const previewContent = document.getElementById('preview-content');
+        let html = '<div class="preview-summary">';
+        
+        html += '<div class="preview-item"><strong>Matched Templates:</strong> ';
+        html += data.matched_templates.join(', ') || 'None';
+        html += '</div>';
+        
+        if (data.workflow && data.workflow.length > 0) {
+            html += '<div class="preview-item"><strong>Components Generated:</strong> ' + data.workflow.length + '</div>';
+            
+            html += '<ul class="component-list">';
+            data.workflow.forEach(item => {
+                const name = item.Body?.Name || item.Body?.Label || 'Unknown';
+                const type = item.Uri?.includes('TaskDefinitions') ? 'Task' : 
+                            item.Uri?.includes('WorkflowDefinitions') ? 'Workflow' :
+                            item.Uri?.includes('BatchApiExecutors') ? 'Executor' :
+                            item.Uri?.includes('CustomDataTypeDefinitions') ? 'DataType' : 'Component';
+                html += '<li><span class="component-type">' + type + '</span> ' + name + '</li>';
+            });
+            html += '</ul>';
+        }
+        
+        html += '</div>';
+        previewContent.innerHTML = html;
+    }
+
+    function updateDiagram(mermaidCode) {
+        const container = document.getElementById('mermaid-container');
+        if (mermaidCode) {
+            container.innerHTML = '<pre class="mermaid">' + mermaidCode + '</pre>';
+            mermaid.init(undefined, container.querySelector('.mermaid'));
+        } else {
+            container.innerHTML = '<p>No diagram available</p>';
+        }
+    }
+
+    function updateJsonView(workflow) {
+        const jsonContent = document.getElementById('json-content');
+        jsonContent.textContent = JSON.stringify(workflow, null, 2);
+    }
+
+    function updateValidation(validation) {
+        const validationContent = document.getElementById('validation-content');
+        let html = '<div class="validation-results">';
+        
+        if (validation.valid) {
+            html += '<div class="validation-status valid">Workflow is valid and ready for import</div>';
+        } else {
+            html += '<div class="validation-status invalid">Validation issues found</div>';
+        }
+        
+        if (validation.errors && validation.errors.length > 0) {
+            html += '<div class="validation-section"><h4>Errors</h4><ul class="error-list">';
+            validation.errors.forEach(err => {
+                html += '<li class="error-item">' + err + '</li>';
+            });
+            html += '</ul></div>';
+        }
+        
+        if (validation.warnings && validation.warnings.length > 0) {
+            html += '<div class="validation-section"><h4>Warnings</h4><ul class="warning-list">';
+            validation.warnings.forEach(warn => {
+                html += '<li class="warning-item">' + warn + '</li>';
+            });
+            html += '</ul></div>';
+        }
+        
+        if (validation.info && validation.info.length > 0) {
+            html += '<div class="validation-section"><h4>Info</h4><ul class="info-list">';
+            validation.info.forEach(info => {
+                html += '<li class="info-item">' + info + '</li>';
+            });
+            html += '</ul></div>';
+        }
+        
+        html += '</div>';
+        validationContent.innerHTML = html;
+    }
+
+    // Initialize mermaid
+    mermaid.initialize({ startOnLoad: false, theme: 'default' });
+</script>
+{% endblock %}
