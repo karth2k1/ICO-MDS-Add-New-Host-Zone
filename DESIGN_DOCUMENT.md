@@ -17,9 +17,13 @@ The **ICO Workflow Generator** is a web application that uses artificial intelli
 7. [The AI Instruction System](#the-ai-instruction-system)
 8. [Post-Processing Pipeline](#post-processing-pipeline)
 9. [Authentication Flow](#authentication-flow)
-10. [Current Limitations](#current-limitations)
-11. [Recommendations for Improvement](#recommendations-for-improvement)
-12. [Glossary](#glossary)
+10. [Debug Mode (Safe Inner Workings)](#debug-mode-safe-inner-workings)
+11. [Current Limitations](#current-limitations)
+12. [Recommendations for Improvement](#recommendations-for-improvement)
+13. [Dual-Path Template Architecture](#dual-path-template-architecture)
+14. [Template Provenance and Governance](#template-provenance-and-governance)
+15. [Customer-Beta Product Roadmap](#customer-beta-product-roadmap)
+16. [Glossary](#glossary)
 
 ---
 
@@ -64,6 +68,99 @@ The **ICO Workflow Generator** is a web application that uses artificial intelli
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Dual-Path Template Architecture
+
+The product currently supports **two generation paths**. This is intentional and helps with reliability during rollout.
+
+| Path | Main Files | How It Works | Best Use |
+|------|------------|--------------|----------|
+| **LLM Few-Shot Path** | `ico-workflow-generator/app/llm_generator.py` | Uses embedded `SAMPLE_TASK_DEFINITION`, `SAMPLE_BATCH_EXECUTOR`, and `SAMPLE_WORKFLOW` as in-context examples for GPT-4.1 | Flexible workflow creation from plain-language requirements |
+| **Rule-Based Template Path** | `ico-workflow-generator/workflow_templates/*`, `ico-workflow-generator/rules/mappings.yaml`, `ico-workflow-generator/app/rule_engine.py` | Matches parsed requirements to prebuilt Python workflow modules | Deterministic fallback and known templates |
+
+### Why Both Paths Exist
+
+- The LLM path provides broader generation capability and better language understanding.
+- The rule-based path provides deterministic behavior and a fallback if LLM is unavailable.
+- Keeping both paths helps product hardening and gradual adoption for customers.
+
+### Template Definitions In Today’s Codebase
+
+1. **LLM sample templates (few-shot examples):**
+   - `SAMPLE_TASK_DEFINITION`
+   - `SAMPLE_BATCH_EXECUTOR`
+   - `SAMPLE_WORKFLOW`
+2. **Rule-based templates (Python modules):**
+   - `workflow_templates.mds.add_host_to_san`
+   - `workflow_templates.mds.save_config`
+   - `workflow_templates.compute.toggle_locator_led`
+   - `workflow_templates.compute.get_server_inventory`
+3. **ICO runtime string templates inside JSON:**
+   - Go-template syntax such as `{{.global.task.input.param}}`
+
+---
+
+## Template Provenance and Governance
+
+### Provenance: Where Templates Came From
+
+Templates and few-shot examples were derived from known-good ICO exports and then refined through import validation feedback:
+
+- `MDS_VLAN_Management_Tasks_and_Workflow.json`
+- `MDS_Save_Configuration_Task_and_Workflow.json`
+- `Workflow_Example-AddNewHosttoSAN_11-23-2022.json`
+- `Toggle_Locator_LED_Task.json`
+
+### Governance: How New Templates Should Be Added
+
+For customer-beta quality, add templates with a controlled process:
+
+1. **Source capture**: capture workflow/task JSON from Intersight export or validated internal sample.
+2. **Normalization**: remove environment-specific identifiers and sanitize labels/names.
+3. **Validation**: run local validator plus import verification in a beta test tenant.
+4. **Cataloging**: classify by domain (`mds`, `compute`, `storage`, `generic-webapi`).
+5. **Promotion**: include as LLM context example (or rule template) only after passing checks.
+6. **Versioning**: track template version, source, validation date, and owner.
+
+### Minimum Metadata Per Template Artifact
+
+| Field | Description |
+|------|-------------|
+| `template_id` | Stable identifier |
+| `source_type` | `intersight_export`, `repo_file`, `uploaded_file` |
+| `source_reference` | File path, URL, or repo + ref |
+| `domain` | `mds`, `compute`, `storage`, `generic` |
+| `validation_status` | `draft`, `validated`, `deprecated` |
+| `validated_on` | Date of last verification |
+| `owner` | Team or maintainer |
+
+---
+
+## Customer-Beta Product Roadmap
+
+### Product Direction
+
+The next product milestone is **customer beta**, focused on expanding context inputs safely and validating quality end-to-end.
+
+### Planned Beta Features
+
+1. **Context ingestion**
+   - Ad-hoc user upload of ICO JSON workflow/task exports
+   - GitHub public repository ingestion for workflow examples
+2. **Context-aware generation**
+   - User-selected context artifacts added to LLM prompt within token budget
+   - Context provenance returned with every generation response
+3. **Reliability**
+   - Automated test suite with unit, route, and regression tests
+   - CI checks on every commit
+
+### Planned Post-Beta Connectors
+
+- GitHub private repositories via OAuth
+- Intersight catalog/workflow discovery via OAuth
+- Optional semantic retrieval (RAG) at larger scale
 
 ---
 
@@ -447,6 +544,70 @@ Even with good instructions, the AI sometimes makes mistakes. The system include
 | `CISCO_APPKEY` | Environment variable | Chat AI application key |
 | Token endpoint | `https://id.cisco.com/oauth2/default/v1/token` | Get access token |
 | Chat endpoint | `https://chat-ai.cisco.com/openai/deployments/gpt-4.1/chat/completions` | Send prompts |
+
+---
+
+## Debug Mode (Safe Inner Workings)
+
+The product supports a safe, optional Debug Mode to expose internal processing for troubleshooting and development.
+
+### Enablement Model
+
+Debug Mode uses a two-step control:
+
+1. **Capability flag (server-side):**
+   - `DEBUG_MODE_ENABLED=false` by default
+   - When `false`, debug output is never returned
+2. **Per-request activation:**
+   - Client sends `debug=true` or header `X-Debug-Mode: true`
+   - Only effective when capability is enabled
+
+### Runtime Flow
+
+```mermaid
+flowchart TD
+  req[ClientRequest] --> capCheck[CheckDebugCapability]
+  capCheck -->|"disabled or not requested"| normalPath[NormalGenerationPath]
+  capCheck -->|"enabled and requested"| debugPath[CaptureDebugArtifacts]
+  debugPath --> redactPath[RedactSensitiveFields]
+  normalPath --> apiResponse[APIResponse]
+  redactPath --> apiResponse
+```
+
+The response is always `APIResponse`; the `debug` block is added only on the debug branch.
+
+### Where Debug Is Shown
+
+- **API response:** optional `debug` block in `/generate/llm`
+- **UI:** Debug tab that appears only when debug payload is returned
+
+### What Debug Contains
+
+- Sanitized request envelope sent to LLM (messages, parameters)
+- Context selection and token-budget diagnostics
+- Pipeline stages performed (normalize, sanitize, compatibility checks, validation)
+- Timing metadata and safe response shape metadata
+
+### Security Controls
+
+- Sensitive fields are redacted (`token`, `secret`, `password`, `api_key`, `authorization`, etc.)
+- Debug payload is truncated to a configured max size (`DEBUG_MODE_MAX_PAYLOAD_CHARS`)
+- Redaction/truncation notes are included in debug metadata
+
+### Automatic Enum Normalization (WebApi TargetType)
+
+To reduce import failures from LLM enum drift, generation now includes a normalization pass for `workflow.WebApi.TargetType`:
+
+- Invalid values like `Intersight` are normalized to `Endpoint` for internal URLs.
+- Schema strings like `workflow.TargetType` are normalized to valid enum values.
+- External URLs are normalized to `Endpoint` for this ICO schema.
+- Compatibility validation enforces allow-list values: `Endpoint`, `Local`.
+
+### Safe-Use Guidance
+
+- Keep Debug Mode disabled in production unless actively troubleshooting
+- Never copy unredacted request traces to external channels
+- Prefer short-lived enablement windows and least-privilege access
 
 ---
 

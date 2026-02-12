@@ -26,6 +26,8 @@ class CiscoLLMClient:
         self,
         client_id: str = None,
         client_secret: str = None,
+        appkey: str = None,
+        username: str = None,
         oauth_url: str = None,
         chat_url: str = None
     ):
@@ -35,11 +37,15 @@ class CiscoLLMClient:
         Args:
             client_id: OAuth client ID (or set CISCO_CLIENT_ID env var)
             client_secret: OAuth client secret (or set CISCO_CLIENT_SECRET env var)
+            appkey: Cisco Chat AI appkey (or set CISCO_APPKEY env var)
+            username: Cisco username (or set CISCO_USERNAME env var)
             oauth_url: OAuth token URL (optional, uses default)
             chat_url: Chat completions URL (optional, uses default)
         """
         self.client_id = client_id or os.environ.get("CISCO_CLIENT_ID")
         self.client_secret = client_secret or os.environ.get("CISCO_CLIENT_SECRET")
+        self.appkey = appkey or os.environ.get("CISCO_APPKEY")
+        self.username = username or os.environ.get("CISCO_USERNAME", "ico-workflow-generator")
         self.oauth_url = oauth_url or os.environ.get("CISCO_OAUTH_URL", self.DEFAULT_OAUTH_URL)
         self.chat_url = chat_url or os.environ.get("CISCO_CHAT_AI_URL", self.DEFAULT_CHAT_URL)
         
@@ -53,6 +59,12 @@ class CiscoLLMClient:
                 "Cisco OAuth credentials not found. "
                 "Set CISCO_CLIENT_ID and CISCO_CLIENT_SECRET environment variables, "
                 "or pass client_id and client_secret to the constructor."
+            )
+        
+        if not self.appkey:
+            raise ValueError(
+                "Cisco Chat AI appkey not found. "
+                "Set CISCO_APPKEY environment variable."
             )
     
     def _get_access_token(self) -> str:
@@ -115,10 +127,14 @@ class CiscoLLMClient:
         """
         token = self._get_access_token()
         
+        # Build the user field with appkey as required by Cisco Chat AI
+        user_field = json.dumps({"appkey": self.appkey})
+        
         payload = {
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
+            "user": user_field,
         }
         
         if response_format:
@@ -129,7 +145,7 @@ class CiscoLLMClient:
                 self.chat_url,
                 json=payload,
                 headers={
-                    "Authorization": f"Bearer {token}",
+                    "api-key": token,
                     "Content-Type": "application/json",
                     "Accept": "application/json"
                 },

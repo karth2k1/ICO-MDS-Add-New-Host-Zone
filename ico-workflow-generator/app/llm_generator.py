@@ -1,101 +1,1158 @@
 """
-LLM-based workflow generator using GPT-4.1.
+LLM-based workflow generator using GPT-4.1 with sample-based learning.
 
-Replaces the rule-based approach with intelligent natural language understanding.
+This approach feeds real ICO workflow examples to the LLM, enabling it to
+generate ANY workflow - not just pre-defined templates.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
+from app.debug_utils import redact_sensitive, truncate_payload
 from app.llm_client import get_llm_client, CiscoLLMClient
 
 
-# System prompt for workflow generation
-SYSTEM_PROMPT = """You are an expert Cisco Intersight Cloud Orchestrator (ICO) workflow designer.
+# =============================================================================
+# Sample Workflows - These teach the LLM the exact ICO JSON format
+# =============================================================================
 
-Your task is to analyze JIRA ticket text and generate ICO workflow definitions in JSON format.
-
-## Available Workflow Templates
-
-You can generate the following types of workflows:
-
-### 1. Add Host to SAN (MDS Zoning)
-- Creates device aliases for host WWPNs
-- Creates zones and adds to active zoneset
-- Commits zone database and saves configuration
-- Supports single fabric (A only) or dual fabric (A and B)
-
-Required inputs to extract:
-- zone_name: Name for the new zone
-- host_wwpn_fabric_A: WWPN for Fabric A (format: xx:xx:xx:xx:xx:xx:xx:xx)
-- host_wwpn_fabric_B: WWPN for Fabric B (if dual fabric)
-- vsan_id: VSAN ID number
-- use_fabric_b: true if Fabric B is mentioned, false otherwise
-
-### 2. Toggle Locator LED
-- Controls the locator LED on a physical server
-- Useful for identifying servers in the datacenter
-
-Required inputs to extract:
-- server_identifier: Server name, serial, or description
-- led_state: "On" or "Off" (default to "On" if just "toggle" or "identify")
-
-### 3. Get Server Inventory
-- Retrieves list of compute servers from Intersight
-- Can filter by various attributes
-
-Required inputs to extract:
-- max_results: Maximum number of servers (default 100)
-- filter: Optional OData filter expression
-
-### 4. Save MDS Configuration
-- Saves running config to startup config on MDS switch
-
-Required inputs to extract:
-- switch_identifier: MDS switch name or IP
-
-## Response Format
-
-Always respond with valid JSON in this exact structure:
-
-{
-  "workflow_type": "add_host_to_san" | "toggle_locator_led" | "get_server_inventory" | "save_mds_config" | "unknown",
-  "confidence": 0.0-1.0,
-  "extracted_parameters": {
-    // Parameters specific to the workflow type
-  },
-  "reasoning": "Brief explanation of why this workflow was selected",
-  "warnings": ["Any issues or missing information"],
-  "suggested_workflow_name": "Descriptive name for the workflow"
+# Minimal Task Definition example
+SAMPLE_TASK_DEFINITION = {
+    "Body": {
+        "ClassId": "workflow.TaskDefinition",
+        "DefaultVersion": True,
+        "Description": "Enables or disables a port on an MDS switch",
+        "Label": "MDS Port Admin Action",
+        "Name": "MDSPortAdminAction",
+        "ObjectType": "workflow.TaskDefinition",
+        "Properties": {
+            "ExternalMeta": True,
+            "InputDefinition": [
+                {
+                    "CustomDataTypeProperties": {
+                        "CatalogMoid": "shared",
+                        "CustomDataTypeName": "MDSTargetDataType",
+                        "ObjectType": "workflow.CustomDataProperty"
+                    },
+                    "Default": {"ObjectType": "workflow.DefaultValue"},
+                    "Description": "MDS target switch",
+                    "DisplayMeta": {
+                        "InventorySelector": True,
+                        "ObjectType": "workflow.DisplayMeta",
+                        "WidgetType": "None"
+                    },
+                    "Label": "MDS Switch",
+                    "Name": "mds_switch",
+                    "ObjectType": "workflow.TargetDataType",
+                    "Properties": [],
+                    "Required": True
+                },
+                {
+                    "Default": {"ObjectType": "workflow.DefaultValue"},
+                    "Description": "Port interface name (e.g., fc1/1)",
+                    "DisplayMeta": {
+                        "InventorySelector": False,
+                        "ObjectType": "workflow.DisplayMeta",
+                        "WidgetType": "None"
+                    },
+                    "Label": "Port Interface",
+                    "Name": "port_interface",
+                    "ObjectType": "workflow.PrimitiveDataType",
+                    "Properties": {
+                        "Constraints": {"EnumList": [], "ObjectType": "workflow.Constraints"},
+                        "InventorySelector": [],
+                        "ObjectType": "workflow.PrimitiveDataProperty",
+                        "Type": "string"
+                    },
+                    "Required": True
+                },
+                {
+                    "Default": {
+                        "ObjectType": "workflow.DefaultValue",
+                        "Override": True,
+                        "Value": "no shutdown"
+                    },
+                    "Description": "Admin action to perform",
+                    "DisplayMeta": {
+                        "InventorySelector": False,
+                        "ObjectType": "workflow.DisplayMeta",
+                        "WidgetType": "Radio"
+                    },
+                    "Label": "Admin Action",
+                    "Name": "admin_action",
+                    "ObjectType": "workflow.PrimitiveDataType",
+                    "Properties": {
+                        "Constraints": {
+                            "EnumList": [
+                                {"Label": "Enable Port", "ObjectType": "workflow.EnumEntry", "Value": "no shutdown"},
+                                {"Label": "Disable Port", "ObjectType": "workflow.EnumEntry", "Value": "shutdown"}
+                            ],
+                            "ObjectType": "workflow.Constraints"
+                        },
+                        "InventorySelector": [],
+                        "ObjectType": "workflow.PrimitiveDataProperty",
+                        "Type": "enum"
+                    },
+                    "Required": True
+                }
+            ],
+            "ObjectType": "workflow.Properties",
+            "OutputDefinition": [
+                {
+                    "Default": {"ObjectType": "workflow.DefaultValue"},
+                    "Description": "API response",
+                    "DisplayMeta": {
+                        "InventorySelector": False,
+                        "ObjectType": "workflow.DisplayMeta",
+                        "WidgetType": "None"
+                    },
+                    "Label": "Response",
+                    "Name": "response",
+                    "ObjectType": "workflow.PrimitiveDataType",
+                    "Properties": {
+                        "Constraints": {"EnumList": [], "ObjectType": "workflow.Constraints"},
+                        "InventorySelector": [],
+                        "ObjectType": "workflow.PrimitiveDataProperty",
+                        "Type": "json"
+                    }
+                }
+            ],
+            "RetryCount": 3,
+            "RetryDelay": 60,
+            "RetryPolicy": "Fixed",
+            "SupportStatus": "Supported",
+            "Timeout": 600,
+            "TimeoutPolicy": "Timeout"
+        },
+        "RollbackTasks": [],
+        "SharedScope": "user",
+        "Tags": [
+            {"Key": "author", "Value": "ico-automation"},
+            {"Key": "subcategory", "Value": "MDS"},
+            {"Key": "category", "Value": "Networking"}
+        ],
+        "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/TaskDefinitions",
+    "Verb": "POST"
 }
+
+# Minimal BatchApiExecutor example
+SAMPLE_BATCH_EXECUTOR = {
+    "Body": {
+        "Batch": [
+            {
+                "Body": "{\n  \"ins_api\": {\n    \"version\": \"1.2\",\n    \"type\": \"cli_conf\",\n    \"chunk\": \"0\",\n    \"sid\": \"1\",\n    \"input\": \"interface {{.global.task.input.port_interface}} ; {{.global.task.input.admin_action}}\",\n    \"output_format\": \"json\"\n  }\n}",
+                "ContentType": "json",
+                "Description": "Execute port admin action on MDS switch",
+                "EndpointRequestType": "Internal",
+                "Label": "Port Admin Action",
+                "Method": "POST",
+                "Name": "PortAdminAction",
+                "ObjectType": "workflow.WebApi",
+                "Outcomes": [],
+                "Protocol": "https",
+                "ResponseSpec": {
+                    "ErrorParameters": [],
+                    "ObjectType": "content.Grammar",
+                    "Parameters": [
+                        {
+                            "AcceptSingleValue": False,
+                            "ComplexType": "",
+                            "ItemType": "simple",
+                            "Name": "api_response",
+                            "ObjectType": "content.Parameter",
+                            "Path": "$",
+                            "Secure": False,
+                            "Type": "json"
+                        }
+                    ],
+                    "Types": []
+                },
+                "TargetType": "Endpoint",
+                "Url": "/ins"
+            }
+        ],
+        "CancelAction": [],
+        "ClassId": "workflow.BatchApiExecutor",
+        "Constraints": {"ObjectType": "workflow.TaskConstraints"},
+        "Description": "Enables or disables a port on an MDS switch",
+        "Name": "MDS Port Admin Action",
+        "ObjectType": "workflow.BatchApiExecutor",
+        "Output": {
+            "response": "{{.global.PortAdminAction.output.api_response}}"
+        },
+        "SharedScope": "user",
+        "TaskDefinition": {
+            "ObjectType": "workflow.TaskDefinition",
+            "Selector": "Name eq 'MDSPortAdminAction' and Version eq 1"
+        }
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/BatchApiExecutors",
+    "Verb": "POST"
+}
+
+# Minimal WorkflowDefinition example
+SAMPLE_WORKFLOW = {
+    "Body": {
+        "ClassId": "workflow.WorkflowDefinition",
+        "DefaultVersion": True,
+        "Description": "Manages MDS port state with save configuration",
+        "InputDefinition": [
+            {
+                "CustomDataTypeProperties": {
+                    "CatalogMoid": "shared",
+                    "CustomDataTypeName": "MDSTargetDataType",
+                    "ObjectType": "workflow.CustomDataProperty"
+                },
+                "Default": {"ObjectType": "workflow.DefaultValue"},
+                "Description": "MDS switch to configure",
+                "DisplayMeta": {
+                    "InventorySelector": True,
+                    "ObjectType": "workflow.DisplayMeta",
+                    "WidgetType": "None"
+                },
+                "Label": "MDS Switch",
+                "Name": "mds_switch",
+                "ObjectType": "workflow.TargetDataType",
+                "Properties": [],
+                "Required": True
+            },
+            {
+                "Default": {"ObjectType": "workflow.DefaultValue"},
+                "Description": "Port interface (e.g., fc1/1)",
+                "DisplayMeta": {
+                    "InventorySelector": False,
+                    "ObjectType": "workflow.DisplayMeta",
+                    "WidgetType": "None"
+                },
+                "Label": "Port Interface",
+                "Name": "port_interface",
+                "ObjectType": "workflow.PrimitiveDataType",
+                "Properties": {
+                    "Constraints": {"EnumList": [], "ObjectType": "workflow.Constraints"},
+                    "InventorySelector": [],
+                    "ObjectType": "workflow.PrimitiveDataProperty",
+                    "Type": "string"
+                },
+                "Required": True
+            },
+            {
+                "Default": {
+                    "ObjectType": "workflow.DefaultValue",
+                    "Override": True,
+                    "Value": "no shutdown"
+                },
+                "Description": "Enable or disable the port",
+                "DisplayMeta": {
+                    "InventorySelector": False,
+                    "ObjectType": "workflow.DisplayMeta",
+                    "WidgetType": "Radio"
+                },
+                "Label": "Port Action",
+                "Name": "port_action",
+                "ObjectType": "workflow.PrimitiveDataType",
+                "Properties": {
+                    "Constraints": {
+                        "EnumList": [
+                            {"Label": "Enable", "ObjectType": "workflow.EnumEntry", "Value": "no shutdown"},
+                            {"Label": "Disable", "ObjectType": "workflow.EnumEntry", "Value": "shutdown"}
+                        ],
+                        "ObjectType": "workflow.Constraints"
+                    },
+                    "InventorySelector": [],
+                    "ObjectType": "workflow.PrimitiveDataProperty",
+                    "Type": "enum"
+                },
+                "Required": True
+            }
+        ],
+        "InputParameterSet": [],
+        "Label": "MDS Port Management",
+        "Name": "MDSPortManagement",
+        "ObjectType": "workflow.WorkflowDefinition",
+        "OutputDefinition": [
+            {
+                "Default": {"ObjectType": "workflow.DefaultValue"},
+                "Description": "Result message",
+                "DisplayMeta": {
+                    "InventorySelector": False,
+                    "ObjectType": "workflow.DisplayMeta",
+                    "WidgetType": "None"
+                },
+                "Label": "Result",
+                "Name": "result",
+                "ObjectType": "workflow.PrimitiveDataType",
+                "Properties": {
+                    "Constraints": {"EnumList": [], "ObjectType": "workflow.Constraints"},
+                    "InventorySelector": [],
+                    "ObjectType": "workflow.PrimitiveDataProperty",
+                    "Type": "string"
+                }
+            }
+        ],
+        "OutputParameters": {
+            "result": "Port ${workflow.input.port_interface} action '${workflow.input.port_action}' completed successfully."
+        },
+        "Properties": {
+            "EnableDebug": True,
+            "ExternalMeta": True,
+            "ObjectType": "workflow.WorkflowProperties",
+            "SupportStatus": "Supported"
+        },
+        "SharedScope": "user",
+        "Tags": [
+            {"Key": "author", "Value": "ico-automation"},
+            {"Key": "subcategory", "Value": "MDS"},
+            {"Key": "category", "Value": "Networking"}
+        ],
+        "Tasks": [
+            {
+                "Name": "StartTask",
+                "NextTask": "ExecutePortAction",
+                "ObjectType": "workflow.StartTask"
+            },
+            {
+                "Name": "SuccessEndTask",
+                "ObjectType": "workflow.SuccessEndTask"
+            },
+            {
+                "Name": "FailureEndTask",
+                "ObjectType": "workflow.FailureEndTask"
+            },
+            {
+                "CatalogMoid": "user",
+                "Description": "Execute the port admin action",
+                "InputParameters": {
+                    "mds_switch": "${workflow.input.mds_switch}",
+                    "port_interface": "${workflow.input.port_interface}",
+                    "admin_action": "${workflow.input.port_action}"
+                },
+                "Label": "Execute Port Action",
+                "Name": "ExecutePortAction",
+                "ObjectType": "workflow.WorkerTask",
+                "OnSuccess": "SaveConfig",
+                "OnFailure": "FailureEndTask",
+                "TaskDefinitionName": "MDSPortAdminAction",
+                "Version": 1
+            },
+            {
+                "CatalogMoid": "user",
+                "Description": "Save running config to startup",
+                "InputParameters": {
+                    "mds_switch": "${workflow.input.mds_switch}"
+                },
+                "Label": "Save Configuration",
+                "Name": "SaveConfig",
+                "ObjectType": "workflow.WorkerTask",
+                "OnSuccess": "SuccessEndTask",
+                "OnFailure": "FailureEndTask",
+                "TaskDefinitionName": "SaveMDSConfiguration",
+                "Version": 1
+            }
+        ],
+        "UiInputFilters": [],
+        "UiRenderingData": {
+            "Positions": [
+                {"Name": "StartTask", "X": 300, "Y": 50},
+                {"Name": "ExecutePortAction", "X": 300, "Y": 150},
+                {"Name": "SaveConfig", "X": 300, "Y": 250},
+                {"Name": "SuccessEndTask", "X": 300, "Y": 350},
+                {"Name": "FailureEndTask", "X": 500, "Y": 350}
+            ]
+        },
+        "VariableDefinition": [],
+        "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/WorkflowDefinitions",
+    "Verb": "POST"
+}
+
+
+# =============================================================================
+# System Prompt for Pure LLM Generation
+# =============================================================================
+
+BASE_SYSTEM_PROMPT = """You are an expert Cisco Intersight Cloud Orchestrator (ICO) workflow designer.
+
+Your task is to generate complete ICO workflow definitions in JSON format based on user requirements. 
+You will generate the FULL workflow JSON, not just analyze requirements.
+
+## Output Format
+
+You must output a JSON array of bulk.RestSubRequest objects that can be imported into Intersight.
+The array should contain:
+1. Any required CustomDataTypeDefinitions (if needed for new data types)
+2. TaskDefinition objects for each task
+3. BatchApiExecutor objects that implement each task
+4. WorkflowDefinition that orchestrates the tasks
+
+## Key ICO Concepts
+
+### 1. Task Definitions (workflow.TaskDefinition)
+- Define reusable tasks with inputs and outputs
+- Must have matching BatchApiExecutor for implementation
+- Name must be alphanumeric (CamelCase, no spaces)
+- Label can have spaces (user-friendly display name)
+
+### 2. Batch API Executors (workflow.BatchApiExecutor)
+- Implement tasks using WebApi calls
+- For MDS switches, use the NX-API via /ins endpoint with ins_api JSON body
+- Use Go template syntax for variables: {{.global.task.input.param_name}}
+- Output mapping uses: {{.global.WebApiName.output.param_name}}
+
+### 3. Workflow Definitions (workflow.WorkflowDefinition)
+- Orchestrate multiple tasks into a workflow
+- Use ${workflow.input.param} for workflow inputs
+- Use ${TaskName.output.param} for task outputs
+- Must include StartTask, SuccessEndTask, and FailureEndTask
+- Worker tasks need OnSuccess and OnFailure transitions
+
+### 4. MDS Switch Commands (NX-API)
+Common MDS CLI commands for the ins_api input field:
+- Port enable: "interface fc1/1 ; no shutdown"
+- Port disable: "interface fc1/1 ; shutdown"  
+- VSAN assignment: "vsan database ; vsan 100 interface fc1/1"
+- Show commands: "show interface fc1/1 | json native"
+- Config save: "copy running-config startup-config"
+
+### 5. Variable Substitution
+- Task input variables: {{.global.task.input.variable_name}}
+- WebApi output extraction: {{.global.WebApiName.output.param_name}}
+- Workflow variables: ${workflow.input.variable_name}
+- Task output in workflow: ${TaskName.output.variable_name}
+
+## Sample ICO Components
+
+Here are REAL examples of the exact JSON structures you must produce:
+
+### Sample TaskDefinition:
+__SAMPLE_TASK_DEFINITION__
+
+### Sample BatchApiExecutor:
+__SAMPLE_BATCH_EXECUTOR__
+
+### Sample WorkflowDefinition:
+__SAMPLE_WORKFLOW__
 
 ## Important Rules
 
-1. Extract WWPN addresses exactly as written (format: xx:xx:xx:xx:xx:xx:xx:xx)
-2. Extract VSAN IDs as integers
-3. If both Fabric A and B are mentioned, set use_fabric_b to true
-4. If information is ambiguous or missing, note it in warnings
-5. Confidence should reflect how well the request matches available templates
-6. If the request doesn't match any template, use "unknown" and explain what would be needed
+1. Generate COMPLETE, VALID JSON that can be imported to Intersight
+2. Follow the exact structure shown in the samples above
+3. Use alphanumeric CamelCase for Name fields (no spaces)
+4. Use descriptive Labels with spaces for user-friendly display
+5. Include proper UiRenderingData with task positions
+6. Link BatchApiExecutor to TaskDefinition via Selector
+7. For MDS tasks, use MDSTargetDataType from shared catalog
+8. Always include error handling (OnFailure transitions)
+9. Include a save configuration step for MDS workflows
+10. For workflow.WebApi, TargetType must be one of: Endpoint or Local.
+    Never use values like "Intersight" or object-type strings like "workflow.TargetType".
+
+## Response Format
+
+Your response must be a VALID JSON array. Do not include any text before or after the JSON.
+The JSON should be an array starting with [ and ending with ].
 """
+
+
+def build_system_prompt(context_artifacts: Optional[List[Dict[str, Any]]] = None) -> str:
+    """Build system prompt with static samples and optional dynamic context."""
+    prompt = BASE_SYSTEM_PROMPT
+    prompt = prompt.replace("__SAMPLE_TASK_DEFINITION__", json.dumps(SAMPLE_TASK_DEFINITION, indent=2))
+    prompt = prompt.replace("__SAMPLE_BATCH_EXECUTOR__", json.dumps(SAMPLE_BATCH_EXECUTOR, indent=2))
+    prompt = prompt.replace("__SAMPLE_WORKFLOW__", json.dumps(SAMPLE_WORKFLOW, indent=2))
+
+    if not context_artifacts:
+        return prompt
+
+    context_chunks: List[str] = []
+    for idx, artifact in enumerate(context_artifacts, 1):
+        artifact_id = artifact.get("artifact_id", f"artifact-{idx}")
+        name = artifact.get("name", "Unnamed")
+        source_type = artifact.get("source_type", "unknown")
+        source_ref = artifact.get("source_reference", "unknown")
+        domain = artifact.get("domain", "generic")
+        content = artifact.get("content", [])
+        # Keep examples bounded to avoid prompt bloat even after selection.
+        trimmed_content = content[:12] if isinstance(content, list) else []
+
+        context_chunks.append(
+            f"### Dynamic Context Example {idx}\n"
+            f"- ArtifactId: {artifact_id}\n"
+            f"- Name: {name}\n"
+            f"- SourceType: {source_type}\n"
+            f"- SourceReference: {source_ref}\n"
+            f"- Domain: {domain}\n"
+            f"- ExamplePayload:\n{json.dumps(trimmed_content, indent=2)}"
+        )
+
+    return (
+        prompt
+        + "\n\n## Additional User-Supplied Context\n"
+        + "Use these examples when they are relevant to the requirement. "
+        + "Do not copy Moids or tenant-specific identifiers.\n\n"
+        + "\n\n".join(context_chunks)
+    )
+
+
+def _normalize_webapi_target_type(workflow_data: List[Dict]) -> Tuple[List[Dict], List[Dict[str, str]]]:
+    """
+    Normalize WebApi TargetType values to valid ICO enum values.
+
+    The LLM may output semantic labels (e.g. "Intersight") or schema names
+    (e.g. "workflow.TargetType"), which are invalid enum values.
+    """
+    valid_target_types = {"Endpoint", "Local"}
+    changes: List[Dict[str, str]] = []
+
+    def infer_target_type(url: str) -> str:
+        # In this ICO schema, external HTTP URLs still use TargetType=Endpoint.
+        return "Endpoint"
+
+    for idx, item in enumerate(workflow_data):
+        if not isinstance(item, dict):
+            continue
+        body = item.get("Body")
+        if not isinstance(body, dict):
+            continue
+        component_name = body.get("Name", f"Component {idx}")
+        batch_items = body.get("Batch", [])
+        if not isinstance(batch_items, list):
+            continue
+
+        for batch_idx, batch_item in enumerate(batch_items):
+            if not isinstance(batch_item, dict):
+                continue
+            if batch_item.get("ObjectType") != "workflow.WebApi":
+                continue
+
+            url = batch_item.get("Url", "")
+            current_target = batch_item.get("TargetType", "")
+            inferred = infer_target_type(url)
+
+            needs_fix = False
+            if not current_target:
+                needs_fix = True
+            elif isinstance(current_target, str) and current_target.startswith("workflow."):
+                needs_fix = True
+            elif current_target == "Intersight":
+                needs_fix = True
+            elif current_target not in valid_target_types:
+                needs_fix = True
+
+            if needs_fix:
+                batch_item["TargetType"] = inferred
+                changes.append(
+                    {
+                        "component": component_name,
+                        "batch_name": batch_item.get("Name", f"Batch{batch_idx}"),
+                        "from": str(current_target) if current_target else "<missing>",
+                        "to": inferred,
+                    }
+                )
+
+    return workflow_data, changes
+
+
+def _validate_ico_compatibility(workflow_data: List[Dict]) -> List[str]:
+    """
+    Validate that the workflow uses only supported ICO features.
+    
+    The LLM sometimes hallucinates ICO features that don't exist (like expression
+    evaluators, template execution endpoints, or array types). This function
+    detects these and returns a list of error messages.
+    
+    Returns:
+        List of error messages (empty if validation passes)
+    """
+    errors = []
+    valid_protocols = {"https", "http", ""}
+    valid_types = {"string", "integer", "boolean", "json", "enum", "float", "long"}
+    valid_target_types = {"Endpoint", "Local"}
+    invalid_url_patterns = ["template", "expression", "evaluator", "execute"]
+    
+    for idx, item in enumerate(workflow_data):
+        if not isinstance(item, dict) or "Body" not in item:
+            continue
+        body = item.get("Body", {})
+        if not isinstance(body, dict):
+            continue
+        
+        obj_type = body.get("ObjectType", "")
+        name = body.get("Name", f"Component {idx}")
+        
+        # Check BatchApiExecutor for invalid WebApi settings
+        if "Batch" in body and isinstance(body["Batch"], list):
+            for batch_item in body["Batch"]:
+                if not isinstance(batch_item, dict):
+                    continue
+                protocol = batch_item.get("Protocol", "")
+                url = batch_item.get("Url", "")
+                target_type = batch_item.get("TargetType", "")
+                
+                # Check for invalid protocol
+                if protocol.lower() not in valid_protocols:
+                    errors.append(
+                        f"'{name}' uses unsupported Protocol '{protocol}'. "
+                        f"ICO only supports 'https' or 'http' protocols for WebApi calls."
+                    )
+                
+                # Check for hallucinated endpoints
+                url_lower = url.lower()
+                for pattern in invalid_url_patterns:
+                    if pattern in url_lower:
+                        errors.append(
+                            f"'{name}' uses non-existent endpoint '{url}'. "
+                            f"ICO does not have built-in expression evaluation or template execution endpoints."
+                        )
+                        break
+                
+                # Check for invalid TargetType
+                if isinstance(target_type, str) and target_type.startswith("workflow."):
+                    errors.append(
+                        f"'{name}' uses invalid TargetType '{target_type}'. "
+                        f"TargetType must be an enum value, not a schema type. "
+                        f"Valid values are: Endpoint, Local."
+                    )
+                elif target_type == "Intersight":
+                    errors.append(
+                        f"'{name}' uses invalid TargetType 'Intersight'. "
+                        f"Use a valid enum value: Endpoint or Local."
+                    )
+                elif target_type and target_type not in valid_target_types:
+                    errors.append(
+                        f"'{name}' uses unsupported TargetType '{target_type}'. "
+                        f"ICO WebApi TargetType must be one of: Endpoint, Local."
+                    )
+        
+        # Check for invalid type syntax in InputDefinition/OutputDefinition
+        for def_key in ["InputDefinition", "OutputDefinition"]:
+            definitions = body.get(def_key, [])
+            if not isinstance(definitions, list):
+                continue
+            for defn in definitions:
+                if not isinstance(defn, dict):
+                    continue
+                props = defn.get("Properties", {})
+                if not isinstance(props, dict):
+                    continue
+                type_val = props.get("Type", "")
+                param_name = defn.get("Name", "unknown")
+                
+                # Check for array syntax which ICO doesn't support in this format
+                if "[" in str(type_val) or "]" in str(type_val):
+                    errors.append(
+                        f"'{name}' parameter '{param_name}' uses unsupported type '{type_val}'. "
+                        f"ICO PrimitiveDataType supports: string, integer, boolean, json, enum."
+                    )
+                # Check for completely invalid types
+                elif type_val.lower() not in valid_types and type_val:
+                    errors.append(
+                        f"'{name}' parameter '{param_name}' uses unknown type '{type_val}'. "
+                        f"Valid types are: string, integer, boolean, json, enum."
+                    )
+    
+    return errors
+
+
+def _sanitize_labels(workflow_data: List[Dict]) -> List[Dict]:
+    """
+    Sanitize Label fields to match ICO's required pattern.
+    
+    ICO requires labels to match: ^[a-zA-Z0-9]+[\sa-zA-Z0-9_'.:/-]{1,92}$
+    This means:
+    - Must start with alphanumeric
+    - Can contain: letters, numbers, space, underscore, apostrophe, period, colon, slash, hyphen
+    - NOT allowed: parentheses, brackets, and other special characters
+    """
+    import re
+    
+    # Pattern for allowed characters (after the first alphanumeric)
+    allowed_chars = re.compile(r"[^a-zA-Z0-9\s_'.:/\-]")
+    
+    def sanitize_label(label: str) -> str:
+        if not label:
+            return label
+        # Remove disallowed characters
+        sanitized = allowed_chars.sub("", label)
+        # Ensure it starts with alphanumeric
+        sanitized = sanitized.lstrip(" _'.:/-")
+        # Ensure it's not empty and not too long
+        if not sanitized:
+            sanitized = "Label"
+        if len(sanitized) > 93:
+            sanitized = sanitized[:93]
+        return sanitized
+    
+    def process_definitions(definitions: List) -> None:
+        """Process InputDefinition or OutputDefinition lists."""
+        if not isinstance(definitions, list):
+            return
+        for defn in definitions:
+            if isinstance(defn, dict) and "Label" in defn:
+                original = defn["Label"]
+                sanitized = sanitize_label(original)
+                if original != sanitized:
+                    defn["Label"] = sanitized
+    
+    for item in workflow_data:
+        if not isinstance(item, dict) or "Body" not in item:
+            continue
+        body = item.get("Body", {})
+        if not isinstance(body, dict):
+            continue
+        
+        # Sanitize Label at body level
+        if "Label" in body:
+            body["Label"] = sanitize_label(body["Label"])
+        
+        # Sanitize InputDefinition and OutputDefinition labels
+        process_definitions(body.get("InputDefinition", []))
+        process_definitions(body.get("OutputDefinition", []))
+        
+        # Also check Properties for nested definitions
+        props = body.get("Properties", {})
+        if isinstance(props, dict):
+            process_definitions(props.get("InputDefinition", []))
+            process_definitions(props.get("OutputDefinition", []))
+        
+        # Sanitize labels in Batch items
+        if "Batch" in body and isinstance(body["Batch"], list):
+            for batch_item in body["Batch"]:
+                if isinstance(batch_item, dict) and "Label" in batch_item:
+                    batch_item["Label"] = sanitize_label(batch_item["Label"])
+        
+        # Sanitize labels in Tasks
+        if "Tasks" in body and isinstance(body["Tasks"], list):
+            for task in body["Tasks"]:
+                if isinstance(task, dict) and "Label" in task:
+                    task["Label"] = sanitize_label(task["Label"])
+    
+    return workflow_data
+
+
+def _fix_template_escaping(workflow_data: List[Dict]) -> List[Dict]:
+    """
+    Fix LLM's incorrect escaping in Go template expressions.
+    
+    The LLM often generates \" (backslash-quote) inside Go template conditionals like:
+        {{if eq .global.task.input.var \"value\"}}
+    
+    But Go templates expect plain quotes:
+        {{if eq .global.task.input.var "value"}}
+    
+    This function corrects that escaping in all Body strings that contain Go templates.
+    """
+    import re
+    
+    def fix_body_string(body_str: str) -> str:
+        """Fix escaping in a single Body string."""
+        if not isinstance(body_str, str):
+            return body_str
+        
+        # Pattern to find Go template expressions with escaped quotes
+        # Match {{if eq/ne ... \"value\"}} and similar patterns
+        # Replace \" with " inside template expressions {{ ... }}
+        
+        def fix_template_expr(match):
+            """Fix escaped quotes inside a single template expression."""
+            expr = match.group(0)
+            # Replace \" with " inside the template expression
+            fixed = expr.replace('\\"', '"')
+            return fixed
+        
+        # Match Go template expressions: {{ ... }}
+        # This regex captures everything between {{ and }}
+        pattern = r'\{\{[^}]+\}\}'
+        fixed_body = re.sub(pattern, fix_template_expr, body_str)
+        
+        return fixed_body
+    
+    # Process all items in workflow_data
+    for item in workflow_data:
+        if not isinstance(item, dict):
+            continue
+        body = item.get("Body")
+        if not isinstance(body, dict):
+            continue
+        
+        # Check for BatchApiExecutor which has Batch array with WebApi items
+        if "Batch" in body and isinstance(body["Batch"], list):
+            for batch_item in body["Batch"]:
+                if isinstance(batch_item, dict) and "Body" in batch_item:
+                    original = batch_item["Body"]
+                    if isinstance(original, str):
+                        batch_item["Body"] = fix_body_string(original)
+    
+    return workflow_data
+
+
+def generate_workflow_with_llm(
+    jira_text: str,
+    llm_client: CiscoLLMClient = None,
+    context_artifacts: Optional[List[Dict[str, Any]]] = None,
+    context_diagnostics: Optional[Dict[str, Any]] = None,
+    debug_mode: bool = False,
+    debug_max_payload_chars: int = 16000,
+) -> Dict[str, Any]:
+    """
+    Generate a complete ICO workflow from JIRA text using GPT-4.1.
+    
+    This is the new pure-LLM approach where the LLM generates the entire
+    workflow JSON based on sample examples.
+    
+    Args:
+        jira_text: Raw JIRA ticket text describing the workflow requirements
+        llm_client: Optional LLM client instance
+        
+    Returns:
+        Dictionary with workflow, validation, and metadata
+    """
+    client = llm_client or get_llm_client()
+    system_prompt = build_system_prompt(context_artifacts or [])
+    started_at = time.time()
+    debug_payload: Dict[str, Any] = {"enabled": debug_mode}
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"""Generate a COMPLETE ICO workflow for the following requirements. You MUST generate ALL components in a single JSON response.
+
+REQUIREMENTS:
+{jira_text}
+
+CRITICAL INSTRUCTIONS:
+1. Generate a JSON object with key "requests" containing an array
+2. The array MUST include ALL of these components:
+   - ALL TaskDefinition objects needed (one for each task mentioned)
+   - ALL BatchApiExecutor objects (one for each TaskDefinition)
+   - ONE WorkflowDefinition that orchestrates all tasks
+3. Do NOT generate just one component - generate the COMPLETE workflow
+4. Follow the exact JSON structure from the samples provided
+
+Output format: {{"requests": [<all bulk.RestSubRequest objects here>]}}"""}
+    ]
+
+    if debug_mode:
+        debug_payload["request"] = {
+            "llm_request_envelope": {
+                "temperature": 0.2,
+                "max_tokens": 16384,
+                "response_format": {"type": "json_object"},
+                "messages": messages,
+            }
+        }
+        debug_payload["context"] = {
+            "selected_context_count": len(context_artifacts or []),
+            "selected_context_ids": [item.get("artifact_id") for item in (context_artifacts or [])],
+            "diagnostics": context_diagnostics or {},
+        }
+    
+    try:
+        # Get completion with JSON format
+        response = client.chat_completion(
+            messages,
+            temperature=0.2,
+            max_tokens=16384,
+            response_format={"type": "json_object"}
+        )
+        llm_elapsed_ms = int((time.time() - started_at) * 1000)
+        if debug_mode:
+            debug_payload["llm"] = {
+                "latency_ms": llm_elapsed_ms,
+                "response_keys": list(response.keys()) if isinstance(response, dict) else [],
+                "choices_count": len(response.get("choices", [])) if isinstance(response, dict) else 0,
+            }
+        
+        content = response["choices"][0]["message"]["content"]
+        
+        # Parse the response
+        try:
+            workflow_data = json.loads(content)
+        except json.JSONDecodeError as e:
+            result = {
+                "success": False,
+                "error": f"Failed to parse LLM response as JSON: {str(e)}",
+                "raw_response": content[:1000],
+                "workflow": [],
+                "validation": {"valid": False, "errors": [str(e)], "warnings": [], "info": []}
+            }
+            if debug_mode:
+                debug_payload["pipeline"] = {"stage": "parse_json", "error": str(e)}
+                debug_payload["llm"]["raw_content_preview"] = content[:5000]
+                redacted, notes = redact_sensitive(debug_payload)
+                truncated, was_truncated = truncate_payload(redacted, debug_max_payload_chars)
+                result["debug"] = {
+                    "payload": truncated,
+                    "redaction": {"redacted_fields": notes, "truncated": was_truncated},
+                }
+            return result
+        
+        # Handle wrapped responses
+        if isinstance(workflow_data, dict):
+            # LLM wraps in an object with a key like "requests"
+            for key in ["requests", "workflow", "components", "bulk_requests", "data"]:
+                if key in workflow_data:
+                    workflow_data = workflow_data[key]
+                    break
+            else:
+                # If it's a single object with Body, wrap in array
+                if "Body" in workflow_data:
+                    workflow_data = [workflow_data]
+                # If it has any other structure, try to extract arrays
+                elif any(isinstance(v, list) for v in workflow_data.values()):
+                    for v in workflow_data.values():
+                        if isinstance(v, list) and len(v) > 0:
+                            workflow_data = v
+                            break
+        
+        # Ensure it's a list
+        if not isinstance(workflow_data, list):
+            workflow_data = [workflow_data]
+        
+        # Filter to only valid dict items with Body
+        workflow_data = [item for item in workflow_data if isinstance(item, dict) and "Body" in item]
+        if debug_mode:
+            debug_payload["pipeline"] = {
+                "component_count_after_filter": len(workflow_data),
+                "stages": ["parse_json", "normalize", "filter_body_components"],
+            }
+
+        # Normalize invalid WebApi TargetType values (e.g. "Intersight" -> "Endpoint")
+        workflow_data, target_type_changes = _normalize_webapi_target_type(workflow_data)
+        if debug_mode:
+            debug_payload["pipeline"]["stages"].append("normalize_webapi_target_type")
+            debug_payload["pipeline"]["target_type_normalization_changes"] = target_type_changes
+        
+        # Fix: Post-process to correct LLM's double-escaping in Go template conditionals
+        # The LLM incorrectly generates \" inside {{if eq ... "value"}} expressions
+        # Go templates expect plain quotes, not escaped quotes
+        workflow_data = _fix_template_escaping(workflow_data)
+        if debug_mode:
+            debug_payload["pipeline"]["stages"].append("fix_template_escaping")
+        
+        # Fix: Sanitize labels to match ICO's required pattern
+        # Labels can only contain alphanumeric, space, underscore, apostrophe, period, colon, slash, hyphen
+        workflow_data = _sanitize_labels(workflow_data)
+        if debug_mode:
+            debug_payload["pipeline"]["stages"].append("sanitize_labels")
+        
+        # Validate for unsupported ICO patterns that the LLM may hallucinate
+        validation_errors = _validate_ico_compatibility(workflow_data)
+        if validation_errors:
+            result = {
+                "success": False,
+                "error": "The LLM generated a workflow with unsupported ICO features",
+                "validation_errors": validation_errors,
+                "hint": "ICO is designed for infrastructure orchestration (API calls to MDS switches, servers, etc.), "
+                        "not general-purpose programming tasks. Try rephrasing your request to focus on "
+                        "infrastructure operations like managing ports, VLANs, or device configurations.",
+                "workflow": workflow_data,  # Include for debugging
+                "validation": {"valid": False, "errors": validation_errors, "warnings": [], "info": []}
+            }
+            if debug_mode:
+                debug_payload["pipeline"]["stages"].append("validate_ico_compatibility")
+                debug_payload["pipeline"]["compatibility_errors"] = validation_errors
+                redacted, notes = redact_sensitive(debug_payload)
+                truncated, was_truncated = truncate_payload(redacted, debug_max_payload_chars)
+                result["debug"] = {
+                    "payload": truncated,
+                    "redaction": {"redacted_fields": notes, "truncated": was_truncated},
+                }
+            return result
+        
+        if not workflow_data:
+            result = {
+                "success": False,
+                "error": "LLM did not generate any valid workflow components",
+                "raw_response": content[:1000] if content else None,
+                "workflow": [],
+                "validation": {"valid": False, "errors": ["No valid components generated"], "warnings": [], "info": []}
+            }
+            if debug_mode:
+                debug_payload["pipeline"]["stages"].append("empty_workflow_guard")
+                redacted, notes = redact_sensitive(debug_payload)
+                truncated, was_truncated = truncate_payload(redacted, debug_max_payload_chars)
+                result["debug"] = {
+                    "payload": truncated,
+                    "redaction": {"redacted_fields": notes, "truncated": was_truncated},
+                }
+            return result
+        
+        # Validate the generated workflow
+        from app.validator import WorkflowValidator
+        validator = WorkflowValidator()
+        validation = validator.validate(workflow_data)
+        
+        # Generate Mermaid diagram
+        mermaid = ""
+        try:
+            from app.generator import WorkflowGenerator
+            gen = WorkflowGenerator()
+            mermaid = gen.generate_mermaid(workflow_data)
+        except Exception:
+            pass  # Mermaid generation is optional
+        
+        # Extract analysis info from the generated workflow
+        analysis = _extract_analysis_from_workflow(workflow_data, jira_text)
+        
+        result = {
+            "success": True,
+            "workflow": workflow_data,
+            "mermaid": mermaid,
+            "validation": validation,
+            "analysis": analysis,
+            "workflow_type": analysis.get("workflow_type", "custom"),
+            "confidence": 0.9,  # LLM-generated workflows have high confidence
+            "suggested_name": analysis.get("workflow_name"),
+            "context_provenance": [
+                {
+                    "artifact_id": artifact.get("artifact_id"),
+                    "name": artifact.get("name"),
+                    "source_type": artifact.get("source_type"),
+                    "source_reference": artifact.get("source_reference"),
+                    "domain": artifact.get("domain"),
+                    "token_estimate": artifact.get("token_estimate"),
+                }
+                for artifact in (context_artifacts or [])
+            ],
+            "context_diagnostics": context_diagnostics or {},
+            "debug": None,
+        }
+        if debug_mode:
+            debug_payload["pipeline"]["stages"].append("validator_validate")
+            debug_payload["pipeline"]["validation"] = {
+                "valid": validation.get("valid", False),
+                "errors_count": len(validation.get("errors", [])),
+                "warnings_count": len(validation.get("warnings", [])),
+                "info_count": len(validation.get("info", [])),
+            }
+            debug_payload["pipeline"]["elapsed_ms_total"] = int((time.time() - started_at) * 1000)
+            redacted, notes = redact_sensitive(debug_payload)
+            truncated, was_truncated = truncate_payload(redacted, debug_max_payload_chars)
+            result["debug"] = {
+                "payload": truncated,
+                "redaction": {"redacted_fields": notes, "truncated": was_truncated},
+            }
+        return result
+        
+    except Exception as e:
+        import traceback
+        result = {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "workflow": [],
+            "analysis": {},
+            "validation": {"valid": False, "errors": [str(e)], "warnings": [], "info": []}
+        }
+        if debug_mode:
+            debug_payload["pipeline"] = {"stage": "exception", "error": str(e)}
+            redacted, notes = redact_sensitive(debug_payload)
+            truncated, was_truncated = truncate_payload(redacted, debug_max_payload_chars)
+            result["debug"] = {
+                "payload": truncated,
+                "redaction": {"redacted_fields": notes, "truncated": was_truncated},
+            }
+        return result
+
+
+def _extract_analysis_from_workflow(workflow_data: List[Dict], jira_text: str) -> Dict[str, Any]:
+    """Extract analysis info from generated workflow for display."""
+    analysis = {
+        "workflow_type": "custom",
+        "confidence": 0.9,
+        "reasoning": "Generated by LLM based on requirements",
+        "warnings": [],
+        "extracted_parameters": {},
+        "workflow_name": None,
+        "components": {
+            "task_definitions": 0,
+            "batch_executors": 0,
+            "workflows": 0,
+            "custom_types": 0
+        }
+    }
+    
+    for item in workflow_data:
+        # Skip non-dict items
+        if not isinstance(item, dict):
+            continue
+        body = item.get("Body", {})
+        if not isinstance(body, dict):
+            continue
+        obj_type = body.get("ObjectType", "")
+        
+        if obj_type == "workflow.TaskDefinition":
+            analysis["components"]["task_definitions"] += 1
+        elif obj_type == "workflow.BatchApiExecutor":
+            analysis["components"]["batch_executors"] += 1
+        elif obj_type == "workflow.WorkflowDefinition":
+            analysis["components"]["workflows"] += 1
+            analysis["workflow_name"] = body.get("Label") or body.get("Name")
+            # Extract workflow inputs as parameters
+            for inp in body.get("InputDefinition", []):
+                if isinstance(inp, dict):
+                    name = inp.get("Name")
+                    if name:
+                        props = inp.get("Properties", {})
+                        if not isinstance(props, dict):
+                            props = {}
+                        analysis["extracted_parameters"][name] = {
+                            "label": inp.get("Label"),
+                            "type": props.get("Type", "string"),
+                            "required": inp.get("Required", False)
+                        }
+        elif obj_type == "workflow.CustomDataTypeDefinition":
+            analysis["components"]["custom_types"] += 1
+    
+    return analysis
 
 
 def analyze_jira_text(jira_text: str, llm_client: CiscoLLMClient = None) -> Dict[str, Any]:
     """
-    Analyze JIRA ticket text using GPT-4.1 to determine workflow type and extract parameters.
+    Analyze JIRA ticket text to determine what workflow components are needed.
+    
+    This is a lightweight analysis that doesn't generate the full workflow.
     
     Args:
         jira_text: Raw JIRA ticket text
         llm_client: Optional LLM client instance
         
     Returns:
-        Analysis result with workflow_type, parameters, confidence, etc.
+        Analysis result with workflow suggestions
     """
     client = llm_client or get_llm_client()
     
+    analysis_prompt = """Analyze this JIRA ticket and determine what ICO workflow components are needed.
+
+Return a JSON object with:
+{
+  "workflow_type": "string describing the type of automation",
+  "confidence": 0.0-1.0,
+  "suggested_workflow_name": "CamelCase name for the workflow",
+  "required_tasks": ["list of task names that will be needed"],
+  "required_inputs": [
+    {"name": "input_name", "type": "string|integer|boolean|enum", "description": "what this input is for"}
+  ],
+  "mds_commands": ["list of MDS CLI commands that will be used"],
+  "reasoning": "explanation of why these components are needed",
+  "warnings": ["any potential issues or missing information"]
+}"""
+    
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"Analyze this JIRA ticket and determine the appropriate ICO workflow:\n\n{jira_text}"}
+        {"role": "system", "content": analysis_prompt},
+        {"role": "user", "content": jira_text}
     ]
     
     try:
@@ -105,135 +1162,9 @@ def analyze_jira_text(jira_text: str, llm_client: CiscoLLMClient = None) -> Dict
         return {
             "workflow_type": "error",
             "confidence": 0,
-            "extracted_parameters": {},
-            "reasoning": f"LLM analysis failed: {str(e)}",
-            "warnings": [str(e)],
-            "suggested_workflow_name": None
+            "reasoning": f"Analysis failed: {str(e)}",
+            "warnings": [str(e)]
         }
-
-
-def generate_workflow_from_analysis(analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    Generate workflow JSON based on LLM analysis.
-    
-    Args:
-        analysis: Result from analyze_jira_text
-        
-    Returns:
-        List of bulk REST sub-requests for Intersight import
-    """
-    workflow_type = analysis.get("workflow_type", "unknown")
-    params = analysis.get("extracted_parameters", {})
-    
-    if workflow_type == "add_host_to_san":
-        from workflow_templates.mds.add_host_to_san import generate_full_workflow
-        return generate_full_workflow({
-            "use_fabric_b": params.get("use_fabric_b", True),
-            "zone_name": params.get("zone_name"),
-            "wwpns": [params.get("host_wwpn_fabric_A"), params.get("host_wwpn_fabric_B")]
-        })
-    
-    elif workflow_type == "toggle_locator_led":
-        from workflow_templates.compute.toggle_locator_led import generate_full_workflow
-        return generate_full_workflow(params)
-    
-    elif workflow_type == "get_server_inventory":
-        from workflow_templates.compute.get_server_inventory import generate_full_workflow
-        return generate_full_workflow(params)
-    
-    elif workflow_type == "save_mds_config":
-        from workflow_templates.mds.save_config import generate_full_workflow
-        return generate_full_workflow(params)
-    
-    else:
-        # Unknown workflow type - return empty or provide guidance
-        return []
-
-
-def generate_workflow_with_llm(jira_text: str, llm_client: CiscoLLMClient = None) -> Dict[str, Any]:
-    """
-    Full pipeline: analyze JIRA text and generate workflow.
-    
-    Args:
-        jira_text: Raw JIRA ticket text
-        llm_client: Optional LLM client instance
-        
-    Returns:
-        Dictionary with analysis, workflow, and metadata
-    """
-    # Analyze the JIRA text
-    analysis = analyze_jira_text(jira_text, llm_client)
-    
-    # Generate workflow based on analysis
-    workflow = []
-    if analysis.get("workflow_type") not in ("unknown", "error"):
-        workflow = generate_workflow_from_analysis(analysis)
-    
-    # Generate Mermaid diagram if we have a workflow
-    mermaid = ""
-    if workflow:
-        from app.generator import WorkflowGenerator
-        gen = WorkflowGenerator()
-        mermaid = gen.generate_mermaid(workflow)
-    
-    # Validate the workflow
-    validation = {"valid": False, "errors": [], "warnings": [], "info": []}
-    if workflow:
-        from app.validator import WorkflowValidator
-        validator = WorkflowValidator()
-        validation = validator.validate(workflow)
-    
-    return {
-        "success": analysis.get("workflow_type") not in ("unknown", "error"),
-        "analysis": analysis,
-        "workflow": workflow,
-        "mermaid": mermaid,
-        "validation": validation,
-        "workflow_type": analysis.get("workflow_type"),
-        "confidence": analysis.get("confidence", 0),
-        "suggested_name": analysis.get("suggested_workflow_name")
-    }
-
-
-# Prompt for generating custom workflows (advanced feature)
-CUSTOM_WORKFLOW_PROMPT = """You are an expert Cisco Intersight Cloud Orchestrator (ICO) workflow designer.
-
-Generate a complete ICO workflow JSON based on the requirements. The output must be valid JSON that can be imported into Intersight via the Bulk Import feature.
-
-## JSON Structure Requirements
-
-The output must be an array of bulk.RestSubRequest objects. Each request creates one component:
-
-1. **Custom Data Types** (if needed):
-   - Uri: "/v1/workflow/CustomDataTypeDefinitions"
-   - ObjectType: "workflow.CustomDataTypeDefinition"
-
-2. **Task Definitions**:
-   - Uri: "/v1/workflow/TaskDefinitions"
-   - ObjectType: "workflow.TaskDefinition"
-   - Must include Properties with InputDefinition and OutputDefinition
-
-3. **Batch API Executors** (for tasks that call APIs):
-   - Uri: "/v1/workflow/BatchApiExecutors"
-   - ObjectType: "workflow.BatchApiExecutor"
-   - Contains Batch array of workflow.WebApi calls
-
-4. **Workflow Definitions**:
-   - Uri: "/v1/workflow/WorkflowDefinitions"
-   - ObjectType: "workflow.WorkflowDefinition"
-   - Must include Tasks array with StartTask, worker tasks, and end tasks
-
-## Key Rules
-
-1. All Names must be alphanumeric with no spaces (use CamelCase)
-2. Labels can have spaces and are user-friendly
-3. Task references must match exactly
-4. Include UI positions for all tasks
-5. Use Go template syntax for variable substitution: {{.global.taskName.output.paramName}}
-6. Use Intersight syntax for workflow variables: ${workflow.input.paramName}
-
-Generate the complete workflow JSON:
-"""
 
 
 def generate_custom_workflow(
@@ -243,7 +1174,7 @@ def generate_custom_workflow(
     """
     Generate a completely custom workflow using LLM.
     
-    This is an advanced feature that lets the LLM design the entire workflow.
+    This is an alias for generate_workflow_with_llm for backward compatibility.
     
     Args:
         requirements: Detailed requirements for the workflow
@@ -252,44 +1183,4 @@ def generate_custom_workflow(
     Returns:
         Generated workflow and metadata
     """
-    client = llm_client or get_llm_client()
-    
-    messages = [
-        {"role": "system", "content": CUSTOM_WORKFLOW_PROMPT},
-        {"role": "user", "content": requirements}
-    ]
-    
-    try:
-        # Get JSON completion
-        response = client.chat_completion(
-            messages,
-            temperature=0.2,
-            max_tokens=8192,
-            response_format={"type": "json_object"}
-        )
-        
-        content = response["choices"][0]["message"]["content"]
-        workflow = json.loads(content)
-        
-        # If the LLM wrapped it in an object, extract the array
-        if isinstance(workflow, dict) and "workflow" in workflow:
-            workflow = workflow["workflow"]
-        
-        # Validate
-        from app.validator import WorkflowValidator
-        validator = WorkflowValidator()
-        validation = validator.validate(workflow if isinstance(workflow, list) else [workflow])
-        
-        return {
-            "success": True,
-            "workflow": workflow,
-            "validation": validation
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "workflow": [],
-            "validation": {"valid": False, "errors": [str(e)], "warnings": [], "info": []}
-        }
+    return generate_workflow_with_llm(requirements, llm_client)

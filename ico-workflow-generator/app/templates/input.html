@@ -9,6 +9,30 @@
         <p class="description">Paste your JIRA ticket content below. The system will analyze the requirements and generate a valid Intersight Cloud Orchestrator workflow.</p>
         
         <form id="generate-form" method="POST">
+            <div class="form-group generation-method">
+                <label>Generation Method:</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="method" value="llm" id="method-llm" checked>
+                        <span>LLM (GPT-4.1)</span>
+                        <small>Intelligent parsing using Cisco Chat AI</small>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="method" value="rules" id="method-rules">
+                        <span>Rule-based</span>
+                        <small>Pattern matching (fallback)</small>
+                    </label>
+                </div>
+                <div id="llm-status" class="llm-status"></div>
+                <div id="debug-controls" class="debug-controls">
+                    <label class="debug-toggle-label">
+                        <input type="checkbox" id="debug-toggle">
+                        <span>Enable Debug Output</span>
+                    </label>
+                    <small id="debug-hint">Debug capability is disabled on server.</small>
+                </div>
+            </div>
+            
             <div class="form-group">
                 <label for="jira_text">JIRA Requirements:</label>
                 <textarea 
@@ -33,6 +57,24 @@ Actions required:
 5. Save configuration"
                 ></textarea>
             </div>
+
+            <div class="form-group context-manager">
+                <label>Context Sources (Optional):</label>
+                <p class="context-help">Upload ICO JSON exports or import from a public GitHub repository, then select artifacts to include in prompt context.</p>
+
+                <div class="context-ingest-row">
+                    <input type="file" id="context-files" accept=".json" multiple>
+                    <button type="button" class="btn btn-small" id="upload-context-btn">Upload Context JSON</button>
+                </div>
+
+                <div class="context-ingest-row">
+                    <input type="text" id="github-repo-url" placeholder="https://github.com/org/repo">
+                    <button type="button" class="btn btn-small" id="import-github-btn">Import GitHub Public Repo</button>
+                </div>
+
+                <div id="context-message" class="context-message" style="display:none;"></div>
+                <div id="context-list" class="context-list"></div>
+            </div>
             
             <div class="button-group">
                 <button type="submit" class="btn btn-primary" id="generate-btn">
@@ -52,6 +94,7 @@ Actions required:
             <button class="tab-btn" data-tab="diagram">Diagram</button>
             <button class="tab-btn" data-tab="json">JSON</button>
             <button class="tab-btn" data-tab="validation">Validation</button>
+            <button class="tab-btn" data-tab="debug" id="debug-tab-btn" style="display: none;">Debug</button>
         </div>
 
         <div class="tab-content" id="preview-tab">
@@ -77,12 +120,167 @@ Actions required:
             <h3>Validation Results</h3>
             <div id="validation-content"></div>
         </div>
+
+        <div class="tab-content" id="debug-tab" style="display: none;">
+            <h3>Debug Details (Sanitized)</h3>
+            <pre id="debug-content" class="json-preview"></pre>
+        </div>
     </div>
 </div>
 
 <script>
     // Store the generated workflow data
     let generatedWorkflow = null;
+    let lastAnalysis = null;
+    let availableContextArtifacts = [];
+    let debugCapabilityEnabled = false;
+    let lastDebugPayload = null;
+
+    // Check LLM status on page load
+    async function checkLLMStatus() {
+        try {
+            const response = await fetch('/status');
+            const data = await response.json();
+            const statusDiv = document.getElementById('llm-status');
+            
+            if (data.llm_configured) {
+                statusDiv.innerHTML = '<span class="status-ok">✓ LLM Connected</span>';
+                statusDiv.className = 'llm-status configured';
+            } else {
+                statusDiv.innerHTML = '<span class="status-warn">⚠ LLM not configured - Set CISCO_CLIENT_ID and CISCO_CLIENT_SECRET</span>';
+                statusDiv.className = 'llm-status not-configured';
+                // Auto-select rules if LLM not configured
+                document.getElementById('method-rules').checked = true;
+            }
+            debugCapabilityEnabled = !!data.debug_mode_enabled;
+            const debugToggle = document.getElementById('debug-toggle');
+            const debugHint = document.getElementById('debug-hint');
+            if (debugCapabilityEnabled) {
+                debugToggle.disabled = false;
+                debugHint.textContent = 'Debug capability is enabled. Toggle to include sanitized internals.';
+            } else {
+                debugToggle.checked = false;
+                debugToggle.disabled = true;
+                debugHint.textContent = 'Debug capability is disabled on server.';
+            }
+        } catch (e) {
+            document.getElementById('llm-status').innerHTML = '<span class="status-error">✗ Cannot connect to server</span>';
+        }
+    }
+    checkLLMStatus();
+    loadContextArtifacts();
+
+    function getSelectedContextIds() {
+        const checkboxes = document.querySelectorAll('input[name="context-artifact"]:checked');
+        return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    function showContextMessage(message, isError=false) {
+        const msg = document.getElementById('context-message');
+        msg.textContent = message;
+        msg.style.display = 'block';
+        msg.className = isError ? 'context-message error' : 'context-message success';
+    }
+
+    async function loadContextArtifacts() {
+        try {
+            const response = await fetch('/context');
+            const data = await response.json();
+            availableContextArtifacts = data.artifacts || [];
+            renderContextList();
+        } catch (e) {
+            showContextMessage('Failed to load context artifacts', true);
+        }
+    }
+
+    function renderContextList() {
+        const list = document.getElementById('context-list');
+        if (!availableContextArtifacts.length) {
+            list.innerHTML = '<div class="context-empty">No context artifacts uploaded yet.</div>';
+            return;
+        }
+
+        let html = '<div class="context-items">';
+        availableContextArtifacts.forEach((artifact) => {
+            const meta = `${artifact.source_type} | ${artifact.domain} | ~${artifact.token_estimate || 0} tokens`;
+            html += `
+                <div class="context-item">
+                    <label>
+                        <input type="checkbox" name="context-artifact" value="${artifact.artifact_id}">
+                        <span class="context-name">${artifact.name}</span>
+                    </label>
+                    <span class="context-meta">${meta}</span>
+                    <button type="button" class="btn btn-small context-delete-btn" data-id="${artifact.artifact_id}">Delete</button>
+                </div>
+            `;
+        });
+        html += '</div>';
+        list.innerHTML = html;
+
+        document.querySelectorAll('.context-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const artifactId = this.dataset.id;
+                try {
+                    const response = await fetch('/context/' + artifactId, { method: 'DELETE' });
+                    if (!response.ok) {
+                        throw new Error('Delete failed');
+                    }
+                    showContextMessage('Context artifact deleted');
+                    loadContextArtifacts();
+                } catch (e) {
+                    showContextMessage('Failed to delete context artifact', true);
+                }
+            });
+        });
+    }
+
+    document.getElementById('upload-context-btn').addEventListener('click', async function() {
+        const input = document.getElementById('context-files');
+        if (!input.files || input.files.length === 0) {
+            showContextMessage('Select one or more JSON files first', true);
+            return;
+        }
+
+        const formData = new FormData();
+        Array.from(input.files).forEach(file => formData.append('files', file));
+        try {
+            const response = await fetch('/context/upload', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Upload failed');
+            }
+            const count = (data.accepted || []).length;
+            const rejected = (data.rejected || []).length;
+            showContextMessage(`Uploaded ${count} artifact(s). Rejected: ${rejected}.`);
+            input.value = '';
+            loadContextArtifacts();
+        } catch (e) {
+            showContextMessage(e.message, true);
+        }
+    });
+
+    document.getElementById('import-github-btn').addEventListener('click', async function() {
+        const repoUrl = document.getElementById('github-repo-url').value.trim();
+        if (!repoUrl) {
+            showContextMessage('Enter a GitHub repository URL', true);
+            return;
+        }
+        try {
+            const response = await fetch('/context/github/public', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ repo_url: repoUrl })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Import failed');
+            }
+            showContextMessage(`Imported ${data.imported_count} artifact(s) from GitHub.`);
+            loadContextArtifacts();
+        } catch (e) {
+            showContextMessage(e.message, true);
+        }
+    });
 
     // Form submission handler
     document.getElementById('generate-form').addEventListener('submit', async function(e) {
@@ -92,6 +290,7 @@ Actions required:
         const generateBtn = document.getElementById('generate-btn');
         const errorContainer = document.getElementById('error-container');
         const outputSection = document.getElementById('output-section');
+        const useLLM = document.getElementById('method-llm').checked;
         
         // Reset state
         errorContainer.style.display = 'none';
@@ -102,8 +301,17 @@ Actions required:
         try {
             const formData = new FormData();
             formData.append('jira_text', jiraText);
+            const debugRequested = document.getElementById('debug-toggle').checked && debugCapabilityEnabled;
+            formData.append('debug', debugRequested ? 'true' : 'false');
+            const selectedContextIds = getSelectedContextIds();
+            if (selectedContextIds.length > 0) {
+                formData.append('context_ids', selectedContextIds.join(','));
+            }
             
-            const response = await fetch('/generate', {
+            // Choose endpoint based on selected method
+            const endpoint = useLLM ? '/generate/llm' : '/generate';
+            
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 body: formData
             });
@@ -111,14 +319,17 @@ Actions required:
             const data = await response.json();
             
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to generate workflow');
+                let errorMsg = data.error || 'Failed to generate workflow';
+                if (data.hint) errorMsg += '\n' + data.hint;
+                throw new Error(errorMsg);
             }
             
-            // Store the workflow
+            // Store the workflow and analysis
             generatedWorkflow = data.workflow;
+            lastAnalysis = data.analysis || null;
             
-            // Update preview tab
-            updatePreview(data);
+            // Update preview tab (with LLM analysis if available)
+            updatePreview(data, useLLM);
             
             // Update diagram tab
             updateDiagram(data.mermaid);
@@ -128,6 +339,9 @@ Actions required:
             
             // Update validation tab
             updateValidation(data.validation);
+
+            // Update debug tab
+            updateDebug(data.debug);
             
             // Show output section
             outputSection.style.display = 'block';
@@ -149,6 +363,8 @@ Actions required:
         document.getElementById('output-section').style.display = 'none';
         document.getElementById('error-container').style.display = 'none';
         generatedWorkflow = null;
+        lastDebugPayload = null;
+        updateDebug(null);
     });
 
     // Tab switching
@@ -200,13 +416,38 @@ Actions required:
         }
     });
 
-    function updatePreview(data) {
+    function updatePreview(data, useLLM) {
         const previewContent = document.getElementById('preview-content');
         let html = '<div class="preview-summary">';
         
-        html += '<div class="preview-item"><strong>Matched Templates:</strong> ';
-        html += data.matched_templates.join(', ') || 'None';
-        html += '</div>';
+        // Show LLM analysis if available
+        if (useLLM && data.analysis) {
+            html += '<div class="llm-analysis">';
+            html += '<h4>LLM Analysis</h4>';
+            html += '<div class="analysis-item"><strong>Detected Workflow:</strong> ' + (data.analysis.workflow_type || 'Unknown') + '</div>';
+            html += '<div class="analysis-item"><strong>Confidence:</strong> ' + ((data.analysis.confidence || 0) * 100).toFixed(0) + '%</div>';
+            html += '<div class="analysis-item"><strong>Reasoning:</strong> ' + (data.analysis.reasoning || 'N/A') + '</div>';
+            
+            if (data.analysis.extracted_parameters && Object.keys(data.analysis.extracted_parameters).length > 0) {
+                html += '<div class="analysis-item"><strong>Extracted Parameters:</strong><ul>';
+                for (const [key, value] of Object.entries(data.analysis.extracted_parameters)) {
+                    html += '<li><code>' + key + '</code>: ' + JSON.stringify(value) + '</li>';
+                }
+                html += '</ul></div>';
+            }
+            
+            if (data.analysis.warnings && data.analysis.warnings.length > 0) {
+                html += '<div class="analysis-item warnings"><strong>Warnings:</strong><ul>';
+                data.analysis.warnings.forEach(w => { html += '<li>' + w + '</li>'; });
+                html += '</ul></div>';
+            }
+            html += '</div>';
+        } else if (data.matched_templates) {
+            // Rule-based results
+            html += '<div class="preview-item"><strong>Matched Templates:</strong> ';
+            html += data.matched_templates.join(', ') || 'None';
+            html += '</div>';
+        }
         
         if (data.workflow && data.workflow.length > 0) {
             html += '<div class="preview-item"><strong>Components Generated:</strong> ' + data.workflow.length + '</div>';
@@ -221,6 +462,14 @@ Actions required:
                 html += '<li><span class="component-type">' + type + '</span> ' + name + '</li>';
             });
             html += '</ul>';
+        }
+
+        if (data.context_provenance && data.context_provenance.length > 0) {
+            html += '<div class="preview-item"><strong>Context Provenance:</strong><ul class="component-list">';
+            data.context_provenance.forEach(item => {
+                html += '<li><span class="component-type">Context</span> ' + item.name + ' (' + item.source_type + ')</li>';
+            });
+            html += '</ul></div>';
         }
         
         html += '</div>';
@@ -278,6 +527,24 @@ Actions required:
         
         html += '</div>';
         validationContent.innerHTML = html;
+    }
+
+    function updateDebug(debugData) {
+        const debugTabBtn = document.getElementById('debug-tab-btn');
+        const debugContent = document.getElementById('debug-content');
+        lastDebugPayload = debugData || null;
+
+        if (lastDebugPayload) {
+            debugTabBtn.style.display = 'inline-block';
+            debugContent.textContent = JSON.stringify(lastDebugPayload, null, 2);
+        } else {
+            debugTabBtn.style.display = 'none';
+            debugContent.textContent = 'No debug payload available for this run.';
+            const activeTab = document.querySelector('.tab-btn.active');
+            if (activeTab && activeTab.dataset.tab === 'debug') {
+                document.querySelector('.tab-btn[data-tab="preview"]').click();
+            }
+        }
     }
 
     // Initialize mermaid

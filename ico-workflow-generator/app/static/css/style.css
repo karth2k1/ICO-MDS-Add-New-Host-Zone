@@ -382,3 +382,228 @@ footer {
     color: var(--text-muted);
     font-size: 0.9rem;
 }
+
+/* Generation Method Selection */
+.generation-method {
+    background: var(--background-color);
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+}
+
+.radio-group {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 0.5rem;
+}
+
+.radio-label {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex: 1;
+}
+
+.radio-label:hover {
+    border-color: var(--primary-color);
+}
+
+.radio-label input[type="radio"] {
+    margin-right: 0.5rem;
+}
+
+.radio-label input[type="radio"]:checked + span {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.radio-label span {
+    display: flex;
+    align-items: center;
+    font-size: 1rem;
+}
+
+.radio-label small {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+    margin-left: 1.5rem;
+}
+
+.radio-label:has(input:checked) {
+    border-color: var(--primary-color);
+    background-color: rgba(0, 119, 200, 0.05);
+}
+
+/* LLM Status */
+.llm-status {
+    margin-top: 0.75rem;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.llm-status.configured {
+    background-color: #d4edda;
+}
+
+.llm-status.not-configured {
+    background-color: #fff3cd;
+}
+
+.status-ok {
+    color: var(--success-color);
+}
+
+.status-warn {
+    color: #856404;
+}
+
+.status-error {
+    color: var(--error-color);
+}
+
+/* LLM Analysis Section */
+.llm-analysis {
+    background: #e8f4fd;
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    border-left: 4px solid var(--primary-color);
+}
+
+.llm-analysis h4 {
+    color: var(--primary-color);
+    margin-bottom: 0.75rem;
+}
+
+.analysis-item {
+    margin-bottom: 0.5rem;
+}
+
+.analysis-item code {
+    background: #ddd;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.85rem;
+}
+
+.analysis-item ul {
+    margin-left: 1.5rem;
+    margin-top: 0.25rem;
+}
+
+.analysis-item.warnings {
+    background: #fff3cd;
+    padding: 0.5rem;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+}
+
+.analysis-item.warnings ul {
+    color: #856404;
+}
+
+/* Debug controls */
+.debug-controls {
+    margin-top: 0.75rem;
+    padding: 0.5rem;
+    background: #eef5fb;
+    border-radius: 4px;
+}
+
+.debug-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+#debug-hint {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* Context Manager */
+.context-manager {
+    background: var(--background-color);
+    padding: 1rem;
+    border-radius: 6px;
+}
+
+.context-help {
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.context-ingest-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.context-ingest-row input[type="text"] {
+    flex: 1;
+    padding: 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+
+.context-message {
+    margin: 0.5rem 0;
+    padding: 0.6rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.context-message.success {
+    background: #d4edda;
+    color: var(--success-color);
+}
+
+.context-message.error {
+    background: #f8d7da;
+    color: var(--error-color);
+}
+
+.context-list {
+    margin-top: 0.75rem;
+}
+
+.context-empty {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.context-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.context-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.5rem;
+    align-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.5rem;
+    background: white;
+}
+
+.context-name {
+    margin-left: 0.35rem;
+    font-weight: 600;
+}
+
+.context-meta {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}

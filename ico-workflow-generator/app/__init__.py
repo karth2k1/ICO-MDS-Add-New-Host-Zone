@@ -14,6 +14,15 @@ def create_app(config=None):
         TEMPLATES_DIR=os.path.join(os.path.dirname(os.path.dirname(__file__)), "workflow_templates"),
         RULES_DIR=os.path.join(os.path.dirname(os.path.dirname(__file__)), "rules"),
         SCHEMAS_DIR=os.path.join(os.path.dirname(os.path.dirname(__file__)), "schemas"),
+        CONTEXT_STORE_PATH=os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "data",
+            "context_artifacts.json",
+        ),
+        CONTEXT_MAX_UPLOAD_FILES=10,
+        CONTEXT_MAX_UPLOAD_BYTES=2 * 1024 * 1024,
+        DEBUG_MODE_ENABLED=os.environ.get("DEBUG_MODE_ENABLED", "false").lower() == "true",
+        DEBUG_MODE_MAX_PAYLOAD_CHARS=int(os.environ.get("DEBUG_MODE_MAX_PAYLOAD_CHARS", "16000")),
     )
     
     if config:
