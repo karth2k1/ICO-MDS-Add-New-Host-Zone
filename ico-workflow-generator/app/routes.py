@@ -10,7 +10,11 @@ main_bp = Blueprint("main", __name__)
 
 def is_llm_configured() -> bool:
     """Check if LLM credentials are configured."""
-    return bool(os.environ.get("CISCO_CLIENT_ID") and os.environ.get("CISCO_CLIENT_SECRET"))
+    return bool(
+        os.environ.get("CISCO_CLIENT_ID")
+        and os.environ.get("CISCO_CLIENT_SECRET")
+        and os.environ.get("CISCO_APPKEY")
+    )
 
 
 def get_context_repo():
@@ -165,7 +169,10 @@ def generate_with_llm():
     """
     if not is_llm_configured():
         return jsonify({
-            "error": "LLM not configured. Set CISCO_CLIENT_ID and CISCO_CLIENT_SECRET environment variables.",
+            "error": (
+                "LLM not configured. Set CISCO_CLIENT_ID, CISCO_CLIENT_SECRET, "
+                "and CISCO_APPKEY environment variables."
+            ),
             "hint": "Copy .env.example to .env and add your credentials"
         }), 503
     
@@ -223,7 +230,7 @@ def generate_with_llm():
         # Credentials error
         return jsonify({
             "error": str(e),
-            "hint": "Set CISCO_CLIENT_ID and CISCO_CLIENT_SECRET environment variables"
+            "hint": "Set CISCO_CLIENT_ID, CISCO_CLIENT_SECRET, and CISCO_APPKEY environment variables"
         }), 503
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -245,7 +252,7 @@ def analyze_jira():
     if not is_llm_configured():
         return jsonify({
             "error": "LLM not configured",
-            "hint": "Set CISCO_CLIENT_ID and CISCO_CLIENT_SECRET environment variables"
+            "hint": "Set CISCO_CLIENT_ID, CISCO_CLIENT_SECRET, and CISCO_APPKEY environment variables"
         }), 503
     
     # Get JIRA text
@@ -285,7 +292,7 @@ def generate_custom_workflow():
     if not is_llm_configured():
         return jsonify({
             "error": "LLM not configured",
-            "hint": "Set CISCO_CLIENT_ID and CISCO_CLIENT_SECRET environment variables"
+            "hint": "Set CISCO_CLIENT_ID, CISCO_CLIENT_SECRET, and CISCO_APPKEY environment variables"
         }), 503
     
     data = request.get_json()

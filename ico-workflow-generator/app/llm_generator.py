@@ -548,6 +548,14 @@ def _normalize_webapi_target_type(workflow_data: List[Dict]) -> Tuple[List[Dict]
                 needs_fix = True
             elif current_target == "Intersight":
                 needs_fix = True
+            elif (
+                isinstance(current_target, str)
+                and current_target == "Local"
+                and isinstance(url, str)
+                and url.lower().startswith(("http://", "https://"))
+            ):
+                # Absolute URLs should be treated as Endpoint for this ICO schema.
+                needs_fix = True
             elif current_target not in valid_target_types:
                 needs_fix = True
 
@@ -559,6 +567,81 @@ def _normalize_webapi_target_type(workflow_data: List[Dict]) -> Tuple[List[Dict]
                         "batch_name": batch_item.get("Name", f"Batch{batch_idx}"),
                         "from": str(current_target) if current_target else "<missing>",
                         "to": inferred,
+                    }
+                )
+
+    return workflow_data, changes
+
+
+def _normalize_webapi_request_shape(workflow_data: List[Dict]) -> Tuple[List[Dict], List[Dict[str, str]]]:
+    """
+    Normalize WebApi request fields into a shape that imports reliably.
+
+    The LLM sometimes places URL/method metadata inside WebApi Body for GET calls.
+    ICO WebApi expects URL and Method at the top level of each batch item, with
+    an empty Body for GET requests.
+    """
+    changes: List[Dict[str, str]] = []
+
+    for idx, item in enumerate(workflow_data):
+        if not isinstance(item, dict):
+            continue
+        body = item.get("Body")
+        if not isinstance(body, dict):
+            continue
+        component_name = body.get("Name", f"Component {idx}")
+        batch_items = body.get("Batch", [])
+        if not isinstance(batch_items, list):
+            continue
+
+        for batch_idx, batch_item in enumerate(batch_items):
+            if not isinstance(batch_item, dict) or batch_item.get("ObjectType") != "workflow.WebApi":
+                continue
+
+            batch_name = batch_item.get("Name", f"Batch{batch_idx}")
+            method = str(batch_item.get("Method", "")).upper()
+            raw_body = batch_item.get("Body", "")
+
+            if isinstance(raw_body, str) and raw_body.strip():
+                try:
+                    parsed_body = json.loads(raw_body)
+                except Exception:
+                    parsed_body = None
+                if isinstance(parsed_body, dict):
+                    # If Body contains request metadata, lift URL up and clear Body for GET.
+                    embedded_url = parsed_body.get("url")
+                    if isinstance(embedded_url, str) and embedded_url.strip():
+                        if batch_item.get("Url") != embedded_url:
+                            batch_item["Url"] = embedded_url
+                            changes.append(
+                                {
+                                    "component": component_name,
+                                    "batch_name": batch_name,
+                                    "field": "Url",
+                                    "reason": "promoted from Body.url",
+                                }
+                            )
+                    if method == "GET" and set(parsed_body.keys()).issubset({"url", "method", "headers", "params"}):
+                        batch_item["Body"] = ""
+                        changes.append(
+                            {
+                                "component": component_name,
+                                "batch_name": batch_name,
+                                "field": "Body",
+                                "reason": "cleared metadata-only GET body",
+                            }
+                        )
+
+            endpoint_request_type = str(batch_item.get("EndpointRequestType", "")).strip()
+            url = str(batch_item.get("Url", "")).lower()
+            if endpoint_request_type == "Local":
+                batch_item["EndpointRequestType"] = "External" if url.startswith(("http://", "https://")) else "Internal"
+                changes.append(
+                    {
+                        "component": component_name,
+                        "batch_name": batch_name,
+                        "field": "EndpointRequestType",
+                        "reason": "normalized Local to External/Internal",
                     }
                 )
 
@@ -600,6 +683,7 @@ def _validate_ico_compatibility(workflow_data: List[Dict]) -> List[str]:
                 protocol = batch_item.get("Protocol", "")
                 url = batch_item.get("Url", "")
                 target_type = batch_item.get("TargetType", "")
+                endpoint_request_type = batch_item.get("EndpointRequestType", "")
                 
                 # Check for invalid protocol
                 if protocol.lower() not in valid_protocols:
@@ -634,6 +718,14 @@ def _validate_ico_compatibility(workflow_data: List[Dict]) -> List[str]:
                     errors.append(
                         f"'{name}' uses unsupported TargetType '{target_type}'. "
                         f"ICO WebApi TargetType must be one of: Endpoint, Local."
+                    )
+
+                # EndpointRequestType "Local" has triggered import failures in
+                # some ICO environments; prefer Internal/External.
+                if endpoint_request_type == "Local":
+                    errors.append(
+                        f"'{name}' uses EndpointRequestType 'Local', which may not be supported. "
+                        f"Use 'Internal' for relative URLs or 'External' for absolute URLs."
                     )
         
         # Check for invalid type syntax in InputDefinition/OutputDefinition
@@ -933,6 +1025,11 @@ Output format: {{"requests": [<all bulk.RestSubRequest objects here>]}}"""}
         if debug_mode:
             debug_payload["pipeline"]["stages"].append("normalize_webapi_target_type")
             debug_payload["pipeline"]["target_type_normalization_changes"] = target_type_changes
+
+        workflow_data, webapi_shape_changes = _normalize_webapi_request_shape(workflow_data)
+        if debug_mode:
+            debug_payload["pipeline"]["stages"].append("normalize_webapi_request_shape")
+            debug_payload["pipeline"]["webapi_shape_changes"] = webapi_shape_changes
         
         # Fix: Post-process to correct LLM's double-escaping in Go template conditionals
         # The LLM incorrectly generates \" inside {{if eq ... "value"}} expressions

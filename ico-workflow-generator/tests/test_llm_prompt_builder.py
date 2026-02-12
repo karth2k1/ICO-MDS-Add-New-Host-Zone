@@ -3,6 +3,7 @@
 import json
 
 from app.llm_generator import (
+    _normalize_webapi_request_shape,
     _normalize_webapi_target_type,
     _validate_ico_compatibility,
     build_system_prompt,
@@ -140,4 +141,55 @@ def test_normalize_webapi_target_type_external_becomes_endpoint():
     normalized, changes = _normalize_webapi_target_type(workflow_data)
     assert normalized[0]["Body"]["Batch"][0]["TargetType"] == "Endpoint"
     assert changes and changes[0]["from"] == "External"
+
+
+def test_normalize_webapi_target_type_local_absolute_url_becomes_endpoint():
+    workflow_data = [
+        {
+            "Body": {
+                "Name": "WeatherExecutor",
+                "Batch": [
+                    {
+                        "ObjectType": "workflow.WebApi",
+                        "Name": "GetWeather",
+                        "TargetType": "Local",
+                        "Url": "https://api.openweathermap.org/data/2.5/onecall",
+                    }
+                ],
+            }
+        }
+    ]
+    normalized, _changes = _normalize_webapi_target_type(workflow_data)
+    assert normalized[0]["Body"]["Batch"][0]["TargetType"] == "Endpoint"
+
+
+def test_normalize_webapi_request_shape_get_metadata_body_and_endpoint_request_type():
+    workflow_data = [
+        {
+            "Body": {
+                "Name": "WeatherExecutor",
+                "Batch": [
+                    {
+                        "ObjectType": "workflow.WebApi",
+                        "Name": "GetLatLon",
+                        "Method": "GET",
+                        "Url": "http://api.openweathermap.org/geo/1.0/zip",
+                        "EndpointRequestType": "Local",
+                        "Body": (
+                            "{\n"
+                            "  \"url\": \"http://api.openweathermap.org/geo/1.0/zip?zip={{.global.task.input.zip_code}},US&appid={{.global.task.input.api_key}}\",\n"
+                            "  \"method\": \"GET\"\n"
+                            "}"
+                        ),
+                    }
+                ],
+            }
+        }
+    ]
+
+    normalized, _changes = _normalize_webapi_request_shape(workflow_data)
+    batch_item = normalized[0]["Body"]["Batch"][0]
+    assert batch_item["Url"].startswith("http://api.openweathermap.org/geo/1.0/zip?zip=")
+    assert batch_item["Body"] == ""
+    assert batch_item["EndpointRequestType"] == "External"
 

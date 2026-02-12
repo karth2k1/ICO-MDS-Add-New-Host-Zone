@@ -40,6 +40,7 @@ def test_context_upload_and_list(client):
 def test_generate_llm_uses_context_selection(client, monkeypatch):
     monkeypatch.setenv("CISCO_CLIENT_ID", "x")
     monkeypatch.setenv("CISCO_CLIENT_SECRET", "y")
+    monkeypatch.setenv("CISCO_APPKEY", "z")
 
     # Seed one artifact directly through upload route.
     payload = b"""[
@@ -103,6 +104,7 @@ def test_generate_llm_uses_context_selection(client, monkeypatch):
 def test_debug_not_returned_when_capability_disabled(client, monkeypatch):
     monkeypatch.setenv("CISCO_CLIENT_ID", "x")
     monkeypatch.setenv("CISCO_CLIENT_SECRET", "y")
+    monkeypatch.setenv("CISCO_APPKEY", "z")
 
     def fake_generate(jira_text, **kwargs):
         return {
@@ -130,6 +132,7 @@ def test_debug_returned_when_enabled_and_requested(app, client, monkeypatch):
     app.config["DEBUG_MODE_ENABLED"] = True
     monkeypatch.setenv("CISCO_CLIENT_ID", "x")
     monkeypatch.setenv("CISCO_CLIENT_SECRET", "y")
+    monkeypatch.setenv("CISCO_APPKEY", "z")
 
     def fake_generate(
         jira_text,

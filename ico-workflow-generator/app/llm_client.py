@@ -127,14 +127,12 @@ class CiscoLLMClient:
         """
         token = self._get_access_token()
         
-        # Build the user field with appkey as required by Cisco Chat AI
-        user_field = json.dumps({"appkey": self.appkey})
-        
         payload = {
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
-            "user": user_field,
+            # Cisco Chat AI expects user as a JSON-encoded string.
+            "user": json.dumps({"appkey": self.appkey}),
         }
         
         if response_format:

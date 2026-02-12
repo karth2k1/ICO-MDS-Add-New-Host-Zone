@@ -545,6 +545,13 @@ Even with good instructions, the AI sometimes makes mistakes. The system include
 | Token endpoint | `https://id.cisco.com/oauth2/default/v1/token` | Get access token |
 | Chat endpoint | `https://chat-ai.cisco.com/openai/deployments/gpt-4.1/chat/completions` | Send prompts |
 
+### Chat AI Request Contract Notes
+
+- Runtime readiness check requires all three values: `CISCO_CLIENT_ID`, `CISCO_CLIENT_SECRET`, and `CISCO_APPKEY`.
+- Chat calls send OAuth token in the `api-key` header.
+- Chat calls send `user` as a JSON-encoded string with app key payload (for example `"{\"appkey\":\"...\"}"`).
+- A regression unit test (`tests/test_llm_client.py`) protects this wire format to prevent future 422 regressions.
+
 ---
 
 ## Debug Mode (Safe Inner Workings)
@@ -602,6 +609,15 @@ To reduce import failures from LLM enum drift, generation now includes a normali
 - Schema strings like `workflow.TargetType` are normalized to valid enum values.
 - External URLs are normalized to `Endpoint` for this ICO schema.
 - Compatibility validation enforces allow-list values: `Endpoint`, `Local`.
+
+### WebApi Request-Shape Normalization
+
+To reduce malformed-import failures in generic HTTP workflows, generation also normalizes `workflow.WebApi` request shape:
+
+- If a GET WebApi `Body` contains request metadata (for example `{"url":"...","method":"GET"}`), URL is promoted to the WebApi `Url` field and `Body` is cleared.
+- `EndpointRequestType: Local` is normalized to `External` for absolute URLs and `Internal` for relative URLs.
+- Absolute URLs paired with `TargetType: Local` are normalized to `TargetType: Endpoint`.
+- Regression tests cover this normalization path to prevent recurrence.
 
 ### Safe-Use Guidance
 
