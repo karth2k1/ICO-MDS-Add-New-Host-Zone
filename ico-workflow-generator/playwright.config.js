@@ -1,5 +1,9 @@
 const { defineConfig, devices } = require("@playwright/test");
 
+const browserChannel = process.env.E2E_BROWSER_CHANNEL;
+const executablePath = process.env.E2E_BROWSER_EXECUTABLE_PATH;
+const headless = process.env.E2E_HEADLESS === "false" ? false : true;
+
 module.exports = defineConfig({
   testDir: "./e2e/tests",
   timeout: 120000,
@@ -15,6 +19,9 @@ module.exports = defineConfig({
   ],
   use: {
     baseURL: process.env.E2E_BASE_URL || "http://127.0.0.1:5080",
+    channel: browserChannel || undefined,
+    executablePath: executablePath || undefined,
+    headless,
     trace: "on-first-retry",
     video: "retain-on-failure",
     screenshot: "only-on-failure",
