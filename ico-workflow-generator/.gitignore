@@ -35,6 +35,10 @@ wheels/
 *.swo
 *~
 
+# Node / Playwright
+node_modules/
+e2e/reports/
+
 # Environment variables (credentials)
 .env
 .env.local

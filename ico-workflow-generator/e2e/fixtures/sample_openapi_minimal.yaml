@@ -1,0 +1,30 @@
+openapi: 3.0.0
+info:
+  title: Minimal Pets API
+  version: "1.0.0"
+servers:
+  - url: https://api.example.com
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List pets
+    post:
+      operationId: createPet
+      summary: Create pet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /pets/{petId}:
+    get:
+      operationId: getPetById
+      summary: Get pet by id
+      parameters:
+        - in: path
+          name: petId
+          required: true
+          schema:
+            type: string

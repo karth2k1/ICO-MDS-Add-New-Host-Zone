@@ -13,17 +13,17 @@
                 <label>Generation Option:</label>
                 <div class="radio-group card-group">
                     <label class="radio-label method-card">
-                        <input type="radio" name="method" value="requirements" id="method-requirements" checked>
+                        <input type="radio" name="method" value="requirements" id="method-requirements" data-testid="mode-requirements" checked>
                         <span>Generate Intersight Workflow from requirement</span>
                         <small>Uses LLM (Cisco Chat AI GPT-4.1) with requirement text.</small>
                     </label>
                     <label class="radio-label method-card">
-                        <input type="radio" name="method" value="openapi" id="method-openapi">
+                        <input type="radio" name="method" value="openapi" id="method-openapi" data-testid="mode-openapi">
                         <span>Open API spec</span>
                         <small>Upload OpenAPI spec and generate one task per operation.</small>
                     </label>
                     <label class="radio-label method-card disabled-card" id="method-ucsd-card">
-                        <input type="radio" name="method" value="ucsd" id="method-ucsd" disabled>
+                        <input type="radio" name="method" value="ucsd" id="method-ucsd" data-testid="mode-ucsd" disabled>
                         <span>UCSD workflow convertor</span>
                         <small>Coming soon.</small>
                     </label>
@@ -44,6 +44,7 @@
                 <textarea 
                     id="jira_text" 
                     name="jira_text" 
+                    data-testid="jira-input"
                     rows="12" 
                     placeholder="Example:
 Add new host server-01 to SAN Fabric A and B
@@ -65,24 +66,24 @@ Actions required:
             </div>
             <div class="form-group" id="openapi-group" style="display:none;">
                 <label for="openapi-file">OpenAPI Spec:</label>
-                <input type="file" id="openapi-file" accept=".json,.yaml,.yml">
+                <input type="file" id="openapi-file" data-testid="openapi-file" accept=".json,.yaml,.yml">
                 <div class="openapi-options">
                     <div class="openapi-option">
                         <label for="openapi-max-ops">Max operations</label>
-                        <input type="text" id="openapi-max-ops" placeholder="100">
+                        <input type="text" id="openapi-max-ops" data-testid="openapi-max-ops" placeholder="100">
                         <small>Large specs can exceed import limits; start with 100.</small>
                     </div>
                     <div class="openapi-option">
                         <label for="openapi-path-prefix">Path prefix (optional)</label>
-                        <input type="text" id="openapi-path-prefix" placeholder="/api/v1/compute">
+                        <input type="text" id="openapi-path-prefix" data-testid="openapi-path-prefix" placeholder="/api/v1/compute">
                     </div>
                     <div class="openapi-option">
                         <label for="openapi-tag">Tag (optional)</label>
-                        <input type="text" id="openapi-tag" placeholder="compute">
+                        <input type="text" id="openapi-tag" data-testid="openapi-tag" placeholder="compute">
                     </div>
                     <div class="openapi-option">
                         <label class="debug-toggle-label">
-                            <input type="checkbox" id="openapi-include-workflow" checked>
+                            <input type="checkbox" id="openapi-include-workflow" data-testid="openapi-include-workflow" checked>
                             <span>Include sample workflow</span>
                         </label>
                         <small>Disable to generate tasks/executors only.</small>
@@ -91,7 +92,7 @@ Actions required:
             </div>
             
             <div class="button-group">
-                <button type="submit" class="btn btn-primary" id="generate-btn">
+                <button type="submit" class="btn btn-primary" id="generate-btn" data-testid="generate-btn">
                     <span class="btn-text">Generate Workflow</span>
                     <span class="btn-loading" style="display: none;">Generating...</span>
                 </button>
@@ -99,10 +100,10 @@ Actions required:
             </div>
         </form>
 
-        <div id="error-container" class="error-message" style="display: none;"></div>
+        <div id="error-container" class="error-message" data-testid="error-container" style="display: none;"></div>
     </div>
 
-    <div class="output-section" id="output-section" style="display: none;">
+    <div class="output-section" id="output-section" data-testid="output-section" style="display: none;">
         <div class="tabs">
             <button class="tab-btn active" data-tab="preview">Preview</button>
             <button class="tab-btn" data-tab="diagram">Diagram</button>
