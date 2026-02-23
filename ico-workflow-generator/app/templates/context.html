@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Context Sources - ICO Workflow Generator{% endblock %}
+
+{% block content %}
+<div class="generator-container">
+    <div class="input-section">
+        <h2>Context Sources</h2>
+        <p class="description">
+            Manage reusable context artifacts for LLM generation. Upload ICO JSON exports or import from a public GitHub repository.
+        </p>
+
+        <div class="form-group context-manager">
+            <div class="context-ingest-row">
+                <input type="file" id="context-files" accept=".json" multiple>
+                <button type="button" class="btn btn-small" id="upload-context-btn">Upload Context JSON</button>
+            </div>
+
+            <div class="context-ingest-row">
+                <input type="text" id="github-repo-url" placeholder="https://github.com/org/repo">
+                <button type="button" class="btn btn-small" id="import-github-btn">Import GitHub Public Repo</button>
+            </div>
+
+            <div id="context-message" class="context-message" style="display:none;"></div>
+            <div id="context-list" class="context-list"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let availableContextArtifacts = [];
+
+    function showContextMessage(message, isError=false) {
+        const msg = document.getElementById('context-message');
+        msg.textContent = message;
+        msg.style.display = 'block';
+        msg.className = isError ? 'context-message error' : 'context-message success';
+    }
+
+    async function loadContextArtifacts() {
+        try {
+            const response = await fetch('/context');
+            const data = await response.json();
+            availableContextArtifacts = data.artifacts || [];
+            renderContextList();
+        } catch (e) {
+            showContextMessage('Failed to load context artifacts', true);
+        }
+    }
+
+    function renderContextList() {
+        const list = document.getElementById('context-list');
+        if (!availableContextArtifacts.length) {
+            list.innerHTML = '<div class="context-empty">No context artifacts uploaded yet.</div>';
+            return;
+        }
+
+        let html = '<div class="context-items">';
+        availableContextArtifacts.forEach((artifact) => {
+            const meta = `${artifact.source_type} | ${artifact.domain} | ~${artifact.token_estimate || 0} tokens`;
+            html += `
+                <div class="context-item">
+                    <span class="context-name">${artifact.name}</span>
+                    <span class="context-meta">${meta}</span>
+                    <button type="button" class="btn btn-small context-delete-btn" data-id="${artifact.artifact_id}">Delete</button>
+                </div>
+            `;
+        });
+        html += '</div>';
+        list.innerHTML = html;
+
+        document.querySelectorAll('.context-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const artifactId = this.dataset.id;
+                try {
+                    const response = await fetch('/context/' + artifactId, { method: 'DELETE' });
+                    if (!response.ok) {
+                        throw new Error('Delete failed');
+                    }
+                    showContextMessage('Context artifact deleted');
+                    loadContextArtifacts();
+                } catch (e) {
+                    showContextMessage('Failed to delete context artifact', true);
+                }
+            });
+        });
+    }
+
+    document.getElementById('upload-context-btn').addEventListener('click', async function() {
+        const input = document.getElementById('context-files');
+        if (!input.files || input.files.length === 0) {
+            showContextMessage('Select one or more JSON files first', true);
+            return;
+        }
+
+        const formData = new FormData();
+        Array.from(input.files).forEach(file => formData.append('files', file));
+        try {
+            const response = await fetch('/context/upload', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Upload failed');
+            }
+            const count = (data.accepted || []).length;
+            const rejected = (data.rejected || []).length;
+            showContextMessage(`Uploaded ${count} artifact(s). Rejected: ${rejected}.`);
+            input.value = '';
+            loadContextArtifacts();
+        } catch (e) {
+            showContextMessage(e.message, true);
+        }
+    });
+
+    document.getElementById('import-github-btn').addEventListener('click', async function() {
+        const repoUrl = document.getElementById('github-repo-url').value.trim();
+        if (!repoUrl) {
+            showContextMessage('Enter a GitHub repository URL', true);
+            return;
+        }
+        try {
+            const response = await fetch('/context/github/public', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ repo_url: repoUrl })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Import failed');
+            }
+            showContextMessage(`Imported ${data.imported_count} artifact(s) from GitHub.`);
+            loadContextArtifacts();
+        } catch (e) {
+            showContextMessage(e.message, true);
+        }
+    });
+
+    loadContextArtifacts();
+</script>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}LLM Setup - ICO Workflow Generator{% endblock %}
+
+{% block content %}
+<div class="generator-container single-column">
+    <div class="input-section">
+        <h2>LLM Setup</h2>
+        <p class="description">
+            Configure LLM connection settings used for requirement-based workflow generation.
+        </p>
+
+        <div class="llm-model-banner">
+            <strong>LLM:</strong> <span id="llm-model-name">Cisco Chat AI GPT-4.1</span>
+            <small class="model-note">Model is read-only.</small>
+        </div>
+
+        <form id="llm-setup-form">
+            <div class="form-group">
+                <label for="client_id">Client ID *</label>
+                <input type="text" id="client_id" required>
+            </div>
+            <div class="form-group">
+                <label for="client_secret">Client Secret *</label>
+                <input type="password" id="client_secret" required>
+            </div>
+            <div class="form-group">
+                <label for="appkey">App Key *</label>
+                <input type="password" id="appkey" required>
+            </div>
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" placeholder="ico-workflow-generator">
+            </div>
+            <div class="form-group">
+                <label for="oauth_url">OAuth URL (optional override)</label>
+                <input type="url" id="oauth_url" placeholder="https://id.cisco.com/oauth2/default/v1/token">
+            </div>
+            <div class="form-group">
+                <label for="chat_url">Chat URL (optional override)</label>
+                <input type="url" id="chat_url" placeholder="https://chat-ai.cisco.com/openai/deployments/gpt-4.1/chat/completions">
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="btn btn-primary">Save LLM Settings</button>
+                <button type="button" class="btn btn-secondary" id="llm-test-btn">Test Connectivity</button>
+            </div>
+        </form>
+
+        <div id="llm-setup-message" class="context-message" style="display:none;"></div>
+    </div>
+</div>
+
+<script>
+    function showMessage(message, isError=false) {
+        const msg = document.getElementById('llm-setup-message');
+        msg.textContent = message;
+        msg.style.display = 'block';
+        msg.className = isError ? 'context-message error' : 'context-message success';
+    }
+
+    async function loadSetup() {
+        try {
+            const response = await fetch('/llm/setup');
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to load settings');
+            }
+            document.getElementById('llm-model-name').textContent = data.model || 'Cisco Chat AI GPT-4.1';
+            document.getElementById('client_id').value = data.settings?.client_id || '';
+            document.getElementById('client_secret').value = '';
+            document.getElementById('appkey').value = '';
+            document.getElementById('username').value = data.settings?.username || '';
+            document.getElementById('oauth_url').value = data.settings?.oauth_url || '';
+            document.getElementById('chat_url').value = data.settings?.chat_url || '';
+        } catch (e) {
+            showMessage(e.message, true);
+        }
+    }
+
+    document.getElementById('llm-setup-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const payload = {
+            client_id: document.getElementById('client_id').value.trim(),
+            client_secret: document.getElementById('client_secret').value.trim(),
+            appkey: document.getElementById('appkey').value.trim(),
+            username: document.getElementById('username').value.trim(),
+            oauth_url: document.getElementById('oauth_url').value.trim(),
+            chat_url: document.getElementById('chat_url').value.trim(),
+        };
+        try {
+            const response = await fetch('/llm/setup', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to save settings');
+            }
+            showMessage('LLM settings saved.');
+            document.getElementById('client_secret').value = '';
+            document.getElementById('appkey').value = '';
+        } catch (e) {
+            showMessage(e.message, true);
+        }
+    });
+
+    document.getElementById('llm-test-btn').addEventListener('click', async function() {
+        try {
+            const response = await fetch('/llm/test', { method: 'POST' });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Connectivity test failed');
+            }
+            showMessage(data.message || 'LLM connectivity check passed');
+        } catch (e) {
+            showMessage(e.message, true);
+        }
+    });
+
+    loadSetup();
+</script>
+{% endblock %}

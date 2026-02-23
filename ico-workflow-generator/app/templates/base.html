@@ -17,7 +17,8 @@
             </div>
             <ul class="nav-links">
                 <li><a href="{{ url_for('main.index') }}" class="{% if request.endpoint == 'main.index' %}active{% endif %}">Generate</a></li>
-                <li><a href="{{ url_for('main.list_templates') }}" class="{% if request.endpoint == 'main.list_templates' %}active{% endif %}">Templates</a></li>
+                <li><a href="{{ url_for('main.llm_setup_page') }}" class="{% if request.endpoint == 'main.llm_setup_page' %}active{% endif %}">LLM Setup</a></li>
+                <li><a href="{{ url_for('main.context_manager') }}" class="{% if request.endpoint == 'main.context_manager' %}active{% endif %}">Context Sources</a></li>
             </ul>
         </nav>
     </header>

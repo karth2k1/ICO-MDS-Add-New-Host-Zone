@@ -20,7 +20,7 @@ The **ICO Workflow Generator** is a web application that uses artificial intelli
 10. [Debug Mode (Safe Inner Workings)](#debug-mode-safe-inner-workings)
 11. [Current Limitations](#current-limitations)
 12. [Recommendations for Improvement](#recommendations-for-improvement)
-13. [Dual-Path Template Architecture](#dual-path-template-architecture)
+13. [Generation Modes Architecture](#generation-modes-architecture)
 14. [Template Provenance and Governance](#template-provenance-and-governance)
 15. [Customer-Beta Product Roadmap](#customer-beta-product-roadmap)
 16. [Glossary](#glossary)
@@ -71,20 +71,20 @@ The **ICO Workflow Generator** is a web application that uses artificial intelli
 
 ---
 
-## Dual-Path Template Architecture
+## Generation Modes Architecture
 
-The product currently supports **two generation paths**. This is intentional and helps with reliability during rollout.
+The product currently supports **two generation modes**:
 
-| Path | Main Files | How It Works | Best Use |
+| Mode | Main Files | How It Works | Best Use |
 |------|------------|--------------|----------|
-| **LLM Few-Shot Path** | `ico-workflow-generator/app/llm_generator.py` | Uses embedded `SAMPLE_TASK_DEFINITION`, `SAMPLE_BATCH_EXECUTOR`, and `SAMPLE_WORKFLOW` as in-context examples for GPT-4.1 | Flexible workflow creation from plain-language requirements |
-| **Rule-Based Template Path** | `ico-workflow-generator/workflow_templates/*`, `ico-workflow-generator/rules/mappings.yaml`, `ico-workflow-generator/app/rule_engine.py` | Matches parsed requirements to prebuilt Python workflow modules | Deterministic fallback and known templates |
+| **LLM (JIRA text)** | `ico-workflow-generator/app/llm_generator.py` | Uses few-shot examples plus selected context artifacts to generate ICO workflow JSON | Flexible workflow creation from plain-language requirements |
+| **OpenAPI Upload** | `ico-workflow-generator/app/openapi_generator.py`, `ico-workflow-generator/app/context_ingestors/openapi_ingestor.py` | Parses uploaded OpenAPI spec and generates one task/executor per operation plus one sample workflow | API-contract-driven workflow scaffolding |
 
-### Why Both Paths Exist
+### Why These Modes Exist
 
-- The LLM path provides broader generation capability and better language understanding.
-- The rule-based path provides deterministic behavior and a fallback if LLM is unavailable.
-- Keeping both paths helps product hardening and gradual adoption for customers.
+- LLM mode supports broad natural-language use cases.
+- OpenAPI mode supports deterministic API operation mapping from formal specs.
+- Together they cover both requirement-first and contract-first workflow creation.
 
 ### Template Definitions In Today’s Codebase
 
@@ -92,12 +92,7 @@ The product currently supports **two generation paths**. This is intentional and
    - `SAMPLE_TASK_DEFINITION`
    - `SAMPLE_BATCH_EXECUTOR`
    - `SAMPLE_WORKFLOW`
-2. **Rule-based templates (Python modules):**
-   - `workflow_templates.mds.add_host_to_san`
-   - `workflow_templates.mds.save_config`
-   - `workflow_templates.compute.toggle_locator_led`
-   - `workflow_templates.compute.get_server_inventory`
-3. **ICO runtime string templates inside JSON:**
+2. **ICO runtime string templates inside JSON:**
    - Go-template syntax such as `{{.global.task.input.param}}`
 
 ---
@@ -121,7 +116,7 @@ For customer-beta quality, add templates with a controlled process:
 2. **Normalization**: remove environment-specific identifiers and sanitize labels/names.
 3. **Validation**: run local validator plus import verification in a beta test tenant.
 4. **Cataloging**: classify by domain (`mds`, `compute`, `storage`, `generic-webapi`).
-5. **Promotion**: include as LLM context example (or rule template) only after passing checks.
+5. **Promotion**: include as LLM context example only after passing checks.
 6. **Versioning**: track template version, source, validation date, and owner.
 
 ### Minimum Metadata Per Template Artifact
@@ -149,6 +144,7 @@ The next product milestone is **customer beta**, focused on expanding context in
 1. **Context ingestion**
    - Ad-hoc user upload of ICO JSON workflow/task exports
    - GitHub public repository ingestion for workflow examples
+   - OpenAPI upload mode for API-driven workflow generation
 2. **Context-aware generation**
    - User-selected context artifacts added to LLM prompt within token budget
    - Context provenance returned with every generation response
@@ -624,6 +620,20 @@ To reduce malformed-import failures in generic HTTP workflows, generation also n
 - Keep Debug Mode disabled in production unless actively troubleshooting
 - Never copy unredacted request traces to external channels
 - Prefer short-lived enablement windows and least-privilege access
+
+---
+
+## OpenAPI Upload Mode
+
+The product now supports an API-design driven generation mode:
+
+- User uploads an OpenAPI spec (`.json`, `.yaml`, `.yml`) via `/generate/openapi`.
+- The system parses paths and operations from the spec.
+- It generates one `TaskDefinition` and one `BatchApiExecutor` per operation.
+- It generates one sample `WorkflowDefinition` that chains all generated tasks in sequence.
+- Output uses the same response envelope as other generation paths (`workflow`, `mermaid`, `validation`, `analysis`).
+
+This mode is useful when users already have API contracts and want a starter ICO automation workflow without writing task definitions manually.
 
 ---
 

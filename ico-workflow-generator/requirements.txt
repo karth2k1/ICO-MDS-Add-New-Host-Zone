@@ -3,7 +3,7 @@
 # Flask web framework
 Flask>=3.0.0
 
-# YAML parsing for rule configuration
+# YAML parsing for OpenAPI/context support
 PyYAML>=6.0
 
 # HTTP client for LLM API calls

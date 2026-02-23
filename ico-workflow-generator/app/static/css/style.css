@@ -86,6 +86,11 @@ header {
     gap: 2rem;
 }
 
+.generator-container.single-column {
+    grid-template-columns: 1fr;
+    max-width: 900px;
+}
+
 @media (max-width: 1024px) {
     .generator-container {
         grid-template-columns: 1fr;
@@ -129,6 +134,26 @@ textarea {
     font-size: 0.9rem;
     resize: vertical;
     transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="url"],
+input[type="file"] {
+    width: 100%;
+    padding: 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.95rem;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="url"]:focus,
+input[type="file"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 119, 200, 0.1);
 }
 
 textarea:focus {
@@ -397,6 +422,10 @@ footer {
     margin-top: 0.5rem;
 }
 
+.card-group {
+    flex-direction: column;
+}
+
 .radio-label {
     display: flex;
     flex-direction: column;
@@ -406,6 +435,28 @@ footer {
     cursor: pointer;
     transition: all 0.2s;
     flex: 1;
+}
+
+.method-card {
+    display: block;
+}
+
+.method-card input[type="radio"] {
+    margin-right: 0.5rem;
+}
+
+.method-card span {
+    display: block;
+}
+
+.disabled-card {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: #f1f3f5;
+}
+
+.disabled-card:hover {
+    border-color: var(--border-color);
 }
 
 .radio-label:hover {
@@ -596,6 +647,39 @@ footer {
     border-radius: 6px;
     padding: 0.5rem;
     background: white;
+}
+
+.llm-model-banner {
+    padding: 0.75rem 1rem;
+    background: #eef5fb;
+    border: 1px solid #d2e7f8;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+
+.model-note {
+    margin-left: 0.5rem;
+    color: var(--text-muted);
+}
+
+.openapi-options {
+    margin-top: 0.75rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+@media (max-width: 900px) {
+    .openapi-options {
+        grid-template-columns: 1fr;
+    }
+}
+
+.openapi-option small {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
 }
 
 .context-name {

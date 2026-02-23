@@ -4,8 +4,8 @@ This checklist is used before each customer-beta drop of the ICO Workflow Genera
 
 ## 1) Functional Validation
 
-- [ ] Rule-based generation (`/generate`) returns valid workflow JSON for baseline templates.
 - [ ] LLM generation (`/generate/llm`) succeeds for representative MDS and generic WebApi scenarios.
+- [ ] OpenAPI generation (`/generate/openapi`) creates one task per operation and one sample workflow.
 - [ ] Context upload endpoint (`/context/upload`) accepts valid ICO JSON and rejects invalid payloads.
 - [ ] GitHub public import (`/context/github/public`) imports ICO-compatible artifacts from a sample repo.
 - [ ] Context provenance is included in LLM generation responses.

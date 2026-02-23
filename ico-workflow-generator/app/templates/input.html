@@ -5,25 +5,31 @@
 {% block content %}
 <div class="generator-container">
     <div class="input-section">
-        <h2>JIRA Requirements Input</h2>
-        <p class="description">Paste your JIRA ticket content below. The system will analyze the requirements and generate a valid Intersight Cloud Orchestrator workflow.</p>
+        <h2>Generate Workflow</h2>
+        <p class="description">Choose one generation option, provide input, then generate an Intersight workflow.</p>
         
         <form id="generate-form" method="POST">
-            <div class="form-group generation-method">
-                <label>Generation Method:</label>
-                <div class="radio-group">
-                    <label class="radio-label">
-                        <input type="radio" name="method" value="llm" id="method-llm" checked>
-                        <span>LLM (GPT-4.1)</span>
-                        <small>Intelligent parsing using Cisco Chat AI</small>
+            <div class="form-group generation-method method-cards">
+                <label>Generation Option:</label>
+                <div class="radio-group card-group">
+                    <label class="radio-label method-card">
+                        <input type="radio" name="method" value="requirements" id="method-requirements" checked>
+                        <span>Generate Intersight Workflow from requirement</span>
+                        <small>Uses LLM (Cisco Chat AI GPT-4.1) with requirement text.</small>
                     </label>
-                    <label class="radio-label">
-                        <input type="radio" name="method" value="rules" id="method-rules">
-                        <span>Rule-based</span>
-                        <small>Pattern matching (fallback)</small>
+                    <label class="radio-label method-card">
+                        <input type="radio" name="method" value="openapi" id="method-openapi">
+                        <span>Open API spec</span>
+                        <small>Upload OpenAPI spec and generate one task per operation.</small>
+                    </label>
+                    <label class="radio-label method-card disabled-card" id="method-ucsd-card">
+                        <input type="radio" name="method" value="ucsd" id="method-ucsd" disabled>
+                        <span>UCSD workflow convertor</span>
+                        <small>Coming soon.</small>
                     </label>
                 </div>
                 <div id="llm-status" class="llm-status"></div>
+                <small><a href="/llm-setup">Open LLM setup</a> to configure credentials and test connectivity.</small>
                 <div id="debug-controls" class="debug-controls">
                     <label class="debug-toggle-label">
                         <input type="checkbox" id="debug-toggle">
@@ -33,7 +39,7 @@
                 </div>
             </div>
             
-            <div class="form-group">
+            <div class="form-group" id="requirements-group">
                 <label for="jira_text">JIRA Requirements:</label>
                 <textarea 
                     id="jira_text" 
@@ -57,23 +63,31 @@ Actions required:
 5. Save configuration"
                 ></textarea>
             </div>
-
-            <div class="form-group context-manager">
-                <label>Context Sources (Optional):</label>
-                <p class="context-help">Upload ICO JSON exports or import from a public GitHub repository, then select artifacts to include in prompt context.</p>
-
-                <div class="context-ingest-row">
-                    <input type="file" id="context-files" accept=".json" multiple>
-                    <button type="button" class="btn btn-small" id="upload-context-btn">Upload Context JSON</button>
+            <div class="form-group" id="openapi-group" style="display:none;">
+                <label for="openapi-file">OpenAPI Spec:</label>
+                <input type="file" id="openapi-file" accept=".json,.yaml,.yml">
+                <div class="openapi-options">
+                    <div class="openapi-option">
+                        <label for="openapi-max-ops">Max operations</label>
+                        <input type="text" id="openapi-max-ops" placeholder="100">
+                        <small>Large specs can exceed import limits; start with 100.</small>
+                    </div>
+                    <div class="openapi-option">
+                        <label for="openapi-path-prefix">Path prefix (optional)</label>
+                        <input type="text" id="openapi-path-prefix" placeholder="/api/v1/compute">
+                    </div>
+                    <div class="openapi-option">
+                        <label for="openapi-tag">Tag (optional)</label>
+                        <input type="text" id="openapi-tag" placeholder="compute">
+                    </div>
+                    <div class="openapi-option">
+                        <label class="debug-toggle-label">
+                            <input type="checkbox" id="openapi-include-workflow" checked>
+                            <span>Include sample workflow</span>
+                        </label>
+                        <small>Disable to generate tasks/executors only.</small>
+                    </div>
                 </div>
-
-                <div class="context-ingest-row">
-                    <input type="text" id="github-repo-url" placeholder="https://github.com/org/repo">
-                    <button type="button" class="btn btn-small" id="import-github-btn">Import GitHub Public Repo</button>
-                </div>
-
-                <div id="context-message" class="context-message" style="display:none;"></div>
-                <div id="context-list" class="context-list"></div>
             </div>
             
             <div class="button-group">
@@ -132,7 +146,6 @@ Actions required:
     // Store the generated workflow data
     let generatedWorkflow = null;
     let lastAnalysis = null;
-    let availableContextArtifacts = [];
     let debugCapabilityEnabled = false;
     let lastDebugPayload = null;
 
@@ -144,13 +157,11 @@ Actions required:
             const statusDiv = document.getElementById('llm-status');
             
             if (data.llm_configured) {
-                statusDiv.innerHTML = '<span class="status-ok">✓ LLM Connected</span>';
+                statusDiv.innerHTML = '<span class="status-ok">✓ LLM (Cisco Chat AI GPT-4.1) Connected</span>';
                 statusDiv.className = 'llm-status configured';
             } else {
-                statusDiv.innerHTML = '<span class="status-warn">⚠ LLM not configured - Set CISCO_CLIENT_ID and CISCO_CLIENT_SECRET</span>';
+                statusDiv.innerHTML = '<span class="status-warn">⚠ LLM not configured - Use LLM Setup page</span>';
                 statusDiv.className = 'llm-status not-configured';
-                // Auto-select rules if LLM not configured
-                document.getElementById('method-rules').checked = true;
             }
             debugCapabilityEnabled = !!data.debug_mode_enabled;
             const debugToggle = document.getElementById('debug-toggle');
@@ -168,119 +179,15 @@ Actions required:
         }
     }
     checkLLMStatus();
-    loadContextArtifacts();
 
-    function getSelectedContextIds() {
-        const checkboxes = document.querySelectorAll('input[name="context-artifact"]:checked');
-        return Array.from(checkboxes).map(cb => cb.value);
+    function syncModeFields() {
+        const useOpenAPI = document.getElementById('method-openapi').checked;
+        document.getElementById('requirements-group').style.display = useOpenAPI ? 'none' : 'block';
+        document.getElementById('openapi-group').style.display = useOpenAPI ? 'block' : 'none';
     }
-
-    function showContextMessage(message, isError=false) {
-        const msg = document.getElementById('context-message');
-        msg.textContent = message;
-        msg.style.display = 'block';
-        msg.className = isError ? 'context-message error' : 'context-message success';
-    }
-
-    async function loadContextArtifacts() {
-        try {
-            const response = await fetch('/context');
-            const data = await response.json();
-            availableContextArtifacts = data.artifacts || [];
-            renderContextList();
-        } catch (e) {
-            showContextMessage('Failed to load context artifacts', true);
-        }
-    }
-
-    function renderContextList() {
-        const list = document.getElementById('context-list');
-        if (!availableContextArtifacts.length) {
-            list.innerHTML = '<div class="context-empty">No context artifacts uploaded yet.</div>';
-            return;
-        }
-
-        let html = '<div class="context-items">';
-        availableContextArtifacts.forEach((artifact) => {
-            const meta = `${artifact.source_type} | ${artifact.domain} | ~${artifact.token_estimate || 0} tokens`;
-            html += `
-                <div class="context-item">
-                    <label>
-                        <input type="checkbox" name="context-artifact" value="${artifact.artifact_id}">
-                        <span class="context-name">${artifact.name}</span>
-                    </label>
-                    <span class="context-meta">${meta}</span>
-                    <button type="button" class="btn btn-small context-delete-btn" data-id="${artifact.artifact_id}">Delete</button>
-                </div>
-            `;
-        });
-        html += '</div>';
-        list.innerHTML = html;
-
-        document.querySelectorAll('.context-delete-btn').forEach(btn => {
-            btn.addEventListener('click', async function() {
-                const artifactId = this.dataset.id;
-                try {
-                    const response = await fetch('/context/' + artifactId, { method: 'DELETE' });
-                    if (!response.ok) {
-                        throw new Error('Delete failed');
-                    }
-                    showContextMessage('Context artifact deleted');
-                    loadContextArtifacts();
-                } catch (e) {
-                    showContextMessage('Failed to delete context artifact', true);
-                }
-            });
-        });
-    }
-
-    document.getElementById('upload-context-btn').addEventListener('click', async function() {
-        const input = document.getElementById('context-files');
-        if (!input.files || input.files.length === 0) {
-            showContextMessage('Select one or more JSON files first', true);
-            return;
-        }
-
-        const formData = new FormData();
-        Array.from(input.files).forEach(file => formData.append('files', file));
-        try {
-            const response = await fetch('/context/upload', { method: 'POST', body: formData });
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || 'Upload failed');
-            }
-            const count = (data.accepted || []).length;
-            const rejected = (data.rejected || []).length;
-            showContextMessage(`Uploaded ${count} artifact(s). Rejected: ${rejected}.`);
-            input.value = '';
-            loadContextArtifacts();
-        } catch (e) {
-            showContextMessage(e.message, true);
-        }
-    });
-
-    document.getElementById('import-github-btn').addEventListener('click', async function() {
-        const repoUrl = document.getElementById('github-repo-url').value.trim();
-        if (!repoUrl) {
-            showContextMessage('Enter a GitHub repository URL', true);
-            return;
-        }
-        try {
-            const response = await fetch('/context/github/public', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ repo_url: repoUrl })
-            });
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || 'Import failed');
-            }
-            showContextMessage(`Imported ${data.imported_count} artifact(s) from GitHub.`);
-            loadContextArtifacts();
-        } catch (e) {
-            showContextMessage(e.message, true);
-        }
-    });
+    document.getElementById('method-requirements').addEventListener('change', syncModeFields);
+    document.getElementById('method-openapi').addEventListener('change', syncModeFields);
+    syncModeFields();
 
     // Form submission handler
     document.getElementById('generate-form').addEventListener('submit', async function(e) {
@@ -290,7 +197,7 @@ Actions required:
         const generateBtn = document.getElementById('generate-btn');
         const errorContainer = document.getElementById('error-container');
         const outputSection = document.getElementById('output-section');
-        const useLLM = document.getElementById('method-llm').checked;
+        const useOpenAPI = document.getElementById('method-openapi').checked;
         
         // Reset state
         errorContainer.style.display = 'none';
@@ -300,16 +207,29 @@ Actions required:
         
         try {
             const formData = new FormData();
-            formData.append('jira_text', jiraText);
+            if (!useOpenAPI) {
+                formData.append('jira_text', jiraText);
+            }
             const debugRequested = document.getElementById('debug-toggle').checked && debugCapabilityEnabled;
             formData.append('debug', debugRequested ? 'true' : 'false');
-            const selectedContextIds = getSelectedContextIds();
-            if (selectedContextIds.length > 0) {
-                formData.append('context_ids', selectedContextIds.join(','));
+            if (useOpenAPI) {
+                const openapiInput = document.getElementById('openapi-file');
+                if (!openapiInput.files || openapiInput.files.length === 0) {
+                    throw new Error('Select an OpenAPI .json/.yaml/.yml file first');
+                }
+                formData.append('openapi_file', openapiInput.files[0]);
+                const maxOps = document.getElementById('openapi-max-ops').value.trim();
+                const pathPrefix = document.getElementById('openapi-path-prefix').value.trim();
+                const tag = document.getElementById('openapi-tag').value.trim();
+                const includeWorkflow = document.getElementById('openapi-include-workflow').checked;
+                if (maxOps) formData.append('max_operations', maxOps);
+                if (pathPrefix) formData.append('path_prefix', pathPrefix);
+                if (tag) formData.append('tag', tag);
+                formData.append('include_sample_workflow', includeWorkflow ? 'true' : 'false');
             }
             
             // Choose endpoint based on selected method
-            const endpoint = useLLM ? '/generate/llm' : '/generate';
+            const endpoint = useOpenAPI ? '/generate/openapi' : '/generate/llm';
             
             const response = await fetch(endpoint, {
                 method: 'POST',
@@ -328,8 +248,8 @@ Actions required:
             generatedWorkflow = data.workflow;
             lastAnalysis = data.analysis || null;
             
-            // Update preview tab (with LLM analysis if available)
-            updatePreview(data, useLLM);
+            // Update preview tab
+            updatePreview(data);
             
             // Update diagram tab
             updateDiagram(data.mermaid);
@@ -416,14 +336,14 @@ Actions required:
         }
     });
 
-    function updatePreview(data, useLLM) {
+    function updatePreview(data) {
         const previewContent = document.getElementById('preview-content');
         let html = '<div class="preview-summary">';
         
-        // Show LLM analysis if available
-        if (useLLM && data.analysis) {
+        // Show analysis if available
+        if (data.analysis) {
             html += '<div class="llm-analysis">';
-            html += '<h4>LLM Analysis</h4>';
+            html += '<h4>Generation Analysis</h4>';
             html += '<div class="analysis-item"><strong>Detected Workflow:</strong> ' + (data.analysis.workflow_type || 'Unknown') + '</div>';
             html += '<div class="analysis-item"><strong>Confidence:</strong> ' + ((data.analysis.confidence || 0) * 100).toFixed(0) + '%</div>';
             html += '<div class="analysis-item"><strong>Reasoning:</strong> ' + (data.analysis.reasoning || 'N/A') + '</div>';
@@ -442,11 +362,6 @@ Actions required:
                 html += '</ul></div>';
             }
             html += '</div>';
-        } else if (data.matched_templates) {
-            // Rule-based results
-            html += '<div class="preview-item"><strong>Matched Templates:</strong> ';
-            html += data.matched_templates.join(', ') || 'None';
-            html += '</div>';
         }
         
         if (data.workflow && data.workflow.length > 0) {
@@ -464,14 +379,6 @@ Actions required:
             html += '</ul>';
         }
 
-        if (data.context_provenance && data.context_provenance.length > 0) {
-            html += '<div class="preview-item"><strong>Context Provenance:</strong><ul class="component-list">';
-            data.context_provenance.forEach(item => {
-                html += '<li><span class="component-type">Context</span> ' + item.name + ' (' + item.source_type + ')</li>';
-            });
-            html += '</ul></div>';
-        }
-        
         html += '</div>';
         previewContent.innerHTML = html;
     }

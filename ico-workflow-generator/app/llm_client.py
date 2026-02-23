@@ -9,6 +9,7 @@ import json
 import time
 from typing import Any, Dict, List, Optional
 import requests
+from flask import current_app, has_app_context
 
 
 class CiscoLLMClient:
@@ -206,9 +207,28 @@ class CiscoLLMClient:
 _llm_client: Optional[CiscoLLMClient] = None
 
 
+def reset_llm_client() -> None:
+    """Reset cached client so new settings take effect."""
+    global _llm_client
+    _llm_client = None
+
+
 def get_llm_client() -> CiscoLLMClient:
     """Get or create the singleton LLM client instance."""
     global _llm_client
     if _llm_client is None:
-        _llm_client = CiscoLLMClient()
+        if has_app_context() and current_app.config.get("LLM_SETTINGS_PATH"):
+            from app.llm_settings import LLMSettingsStore, resolve_effective_settings
+
+            settings = resolve_effective_settings(LLMSettingsStore(current_app.config["LLM_SETTINGS_PATH"]))
+            _llm_client = CiscoLLMClient(
+                client_id=settings.get("client_id"),
+                client_secret=settings.get("client_secret"),
+                appkey=settings.get("appkey"),
+                username=settings.get("username") or None,
+                oauth_url=settings.get("oauth_url") or None,
+                chat_url=settings.get("chat_url") or None,
+            )
+        else:
+            _llm_client = CiscoLLMClient()
     return _llm_client

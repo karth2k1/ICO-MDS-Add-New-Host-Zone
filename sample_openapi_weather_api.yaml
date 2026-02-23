@@ -1,0 +1,84 @@
+openapi: 3.0.3
+info:
+  title: Sample Weather API
+  version: "1.0.0"
+  description: >
+    Sample OpenAPI spec for testing ICO OpenAPI upload mode.
+    Includes GET, POST, and DELETE operations.
+servers:
+  - url: https://api.example-weather.com
+paths:
+  /weather/{zipCode}/daily:
+    get:
+      operationId: getDailyForecast
+      summary: Get 7-day forecast by zip code
+      description: Returns daily weather highs/lows and rain flag for 7 days.
+      parameters:
+        - name: zipCode
+          in: path
+          required: true
+          schema:
+            type: string
+          description: US zip code, for example 94040
+        - name: units
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [metric, imperial]
+            default: imperial
+        - name: includeRain
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+      responses:
+        "200":
+          description: Forecast response
+          content:
+            application/json:
+              schema:
+                type: object
+  /weather/alerts/subscriptions:
+    post:
+      operationId: createAlertSubscription
+      summary: Create weather alert subscription
+      description: Creates a weather alert subscription for a target area.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [zipCode, alertType]
+              properties:
+                zipCode:
+                  type: string
+                alertType:
+                  type: string
+                  enum: [rain, snow, wind, heat]
+                email:
+                  type: string
+                  format: email
+      responses:
+        "201":
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                type: object
+  /weather/alerts/subscriptions/{subscriptionId}:
+    delete:
+      operationId: deleteAlertSubscription
+      summary: Delete weather alert subscription
+      description: Removes an existing subscription.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Subscription deleted

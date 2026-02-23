@@ -11,13 +11,16 @@ def create_app(config=None):
     # Default configuration
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production"),
-        TEMPLATES_DIR=os.path.join(os.path.dirname(os.path.dirname(__file__)), "workflow_templates"),
-        RULES_DIR=os.path.join(os.path.dirname(os.path.dirname(__file__)), "rules"),
         SCHEMAS_DIR=os.path.join(os.path.dirname(os.path.dirname(__file__)), "schemas"),
         CONTEXT_STORE_PATH=os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
             "data",
             "context_artifacts.json",
+        ),
+        LLM_SETTINGS_PATH=os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "data",
+            "llm_settings.json",
         ),
         CONTEXT_MAX_UPLOAD_FILES=10,
         CONTEXT_MAX_UPLOAD_BYTES=2 * 1024 * 1024,

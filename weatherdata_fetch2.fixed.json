@@ -1,0 +1,377 @@
+[
+  {
+    "Body": {
+      "ClassId": "workflow.TaskDefinition",
+      "DefaultVersion": true,
+      "Description": "Fetches 7-day weather forecast for a given US zip code using OpenWeatherMap API.",
+      "Label": "Fetch 7-Day Weather Forecast",
+      "Name": "Fetch7DayWeatherForecast",
+      "ObjectType": "workflow.TaskDefinition",
+      "Properties": {
+        "InputDefinition": [
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "US Zip code (e.g., 94040)",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "Zip Code",
+            "Name": "zip_code",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "Max": 10,
+                "Min": 5,
+                "ObjectType": "workflow.Constraints",
+                "Regex": "^[0-9]{5}(?:-[0-9]{4})?$"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "string"
+            },
+            "Required": true
+          },
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "OpenWeatherMap API Key",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "Password"
+            },
+            "Label": "API Key",
+            "Name": "api_key",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "string"
+            },
+            "Required": true
+          }
+        ],
+        "ObjectType": "workflow.Properties",
+        "OutputDefinition": [
+          {
+            "Default": {
+              "ObjectType": "workflow.DefaultValue"
+            },
+            "Description": "Array of 7 days weather data with high, low, and rain/no rain.",
+            "DisplayMeta": {
+              "InventorySelector": false,
+              "ObjectType": "workflow.DisplayMeta",
+              "WidgetType": "None"
+            },
+            "Label": "7-Day Weather",
+            "Name": "seven_day_weather",
+            "ObjectType": "workflow.PrimitiveDataType",
+            "Properties": {
+              "Constraints": {
+                "EnumList": [],
+                "ObjectType": "workflow.Constraints"
+              },
+              "InventorySelector": [],
+              "ObjectType": "workflow.PrimitiveDataProperty",
+              "Type": "json"
+            }
+          }
+        ],
+        "RetryCount": 3,
+        "RetryDelay": 30,
+        "RetryPolicy": "Fixed",
+        "SupportStatus": "Supported",
+        "Timeout": 60,
+        "TimeoutPolicy": "Timeout"
+      },
+      "RollbackTasks": [],
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "category",
+          "Value": "Weather"
+        }
+      ],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/TaskDefinitions",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "Batch": [
+        {
+          "Body": "",
+          "ContentType": "json",
+          "Description": "Get latitude and longitude for zip code",
+          "EndpointRequestType": "External",
+          "Label": "Get Lat/Lon",
+          "Method": "GET",
+          "Name": "GetLatLon",
+          "ObjectType": "workflow.WebApi",
+          "Outcomes": [],
+          "Protocol": "https",
+          "ResponseSpec": {
+            "ErrorParameters": [],
+            "ObjectType": "content.Grammar",
+            "Parameters": [
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "geo_response",
+                "ObjectType": "content.Parameter",
+                "Path": "$",
+                "Secure": false,
+                "Type": "json"
+              }
+            ],
+            "Types": []
+          },
+          "TargetType": "Endpoint",
+          "Url": "http://api.openweathermap.org/geo/1.0/zip?zip={{.global.task.input.zip_code}},US&appid={{.global.task.input.api_key}}"
+        },
+        {
+          "Body": "",
+          "ContentType": "json",
+          "Description": "Fetch 7-day weather forecast using lat/lon",
+          "EndpointRequestType": "External",
+          "Label": "Get 7-Day Forecast",
+          "Method": "GET",
+          "Name": "Get7DayForecast",
+          "ObjectType": "workflow.WebApi",
+          "Outcomes": [],
+          "Protocol": "https",
+          "ResponseSpec": {
+            "ErrorParameters": [],
+            "ObjectType": "content.Grammar",
+            "Parameters": [
+              {
+                "AcceptSingleValue": false,
+                "ComplexType": "",
+                "ItemType": "simple",
+                "Name": "forecast_response",
+                "ObjectType": "content.Parameter",
+                "Path": "$",
+                "Secure": false,
+                "Type": "json"
+              }
+            ],
+            "Types": []
+          },
+          "TargetType": "Endpoint",
+          "Url": "https://api.openweathermap.org/data/2.5/onecall?lat={{.global.GetLatLon.output.geo_response.lat}}&lon={{.global.GetLatLon.output.geo_response.lon}}&exclude=current,minutely,hourly,alerts&units=imperial&appid={{.global.task.input.api_key}}"
+        }
+      ],
+      "CancelAction": [],
+      "ClassId": "workflow.BatchApiExecutor",
+      "Constraints": {
+        "ObjectType": "workflow.TaskConstraints"
+      },
+      "Description": "Fetches 7-day weather forecast for a given US zip code using OpenWeatherMap API.",
+      "Name": "Fetch 7-Day Weather Forecast",
+      "ObjectType": "workflow.BatchApiExecutor",
+      "Output": {
+        "seven_day_weather": "{{.global.Get7DayForecast.output.forecast_response.daily}}"
+      },
+      "SharedScope": "user",
+      "TaskDefinition": {
+        "ObjectType": "workflow.TaskDefinition",
+        "Selector": "Name eq 'Fetch7DayWeatherForecast' and Version eq 1"
+      }
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/BatchApiExecutors",
+    "Verb": "POST"
+  },
+  {
+    "Body": {
+      "ClassId": "workflow.WorkflowDefinition",
+      "DefaultVersion": true,
+      "Description": "Fetches 7-day weather forecast for a US zip code, including highs, lows, and rain/no rain.",
+      "InputDefinition": [
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "US Zip code (e.g., 94040)",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "Zip Code",
+          "Name": "zip_code",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "Max": 10,
+              "Min": 5,
+              "ObjectType": "workflow.Constraints",
+              "Regex": "^[0-9]{5}(?:-[0-9]{4})?$"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "string"
+          },
+          "Required": true
+        },
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "OpenWeatherMap API Key",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "Password"
+          },
+          "Label": "API Key",
+          "Name": "api_key",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "string"
+          },
+          "Required": true
+        }
+      ],
+      "InputParameterSet": [],
+      "Label": "Get 7-Day Weather Forecast",
+      "Name": "Get7DayWeatherForecast",
+      "ObjectType": "workflow.WorkflowDefinition",
+      "OutputDefinition": [
+        {
+          "Default": {
+            "ObjectType": "workflow.DefaultValue"
+          },
+          "Description": "Array of 7 days weather data with high, low, and rain/no rain.",
+          "DisplayMeta": {
+            "InventorySelector": false,
+            "ObjectType": "workflow.DisplayMeta",
+            "WidgetType": "None"
+          },
+          "Label": "7-Day Weather",
+          "Name": "seven_day_weather",
+          "ObjectType": "workflow.PrimitiveDataType",
+          "Properties": {
+            "Constraints": {
+              "EnumList": [],
+              "ObjectType": "workflow.Constraints"
+            },
+            "InventorySelector": [],
+            "ObjectType": "workflow.PrimitiveDataProperty",
+            "Type": "json"
+          }
+        }
+      ],
+      "OutputParameters": {
+        "seven_day_weather": "${Fetch7DayWeatherForecastTask.output.seven_day_weather}"
+      },
+      "Properties": {
+        "EnableDebug": true,
+        "ExternalMeta": true,
+        "ObjectType": "workflow.WorkflowProperties",
+        "SupportStatus": "Supported"
+      },
+      "SharedScope": "user",
+      "Tags": [
+        {
+          "Key": "author",
+          "Value": "ico-automation"
+        },
+        {
+          "Key": "category",
+          "Value": "Weather"
+        }
+      ],
+      "Tasks": [
+        {
+          "Name": "StartTask",
+          "NextTask": "Fetch7DayWeatherForecastTask",
+          "ObjectType": "workflow.StartTask"
+        },
+        {
+          "Name": "SuccessEndTask",
+          "ObjectType": "workflow.SuccessEndTask"
+        },
+        {
+          "Name": "FailureEndTask",
+          "ObjectType": "workflow.FailureEndTask"
+        },
+        {
+          "CatalogMoid": "user",
+          "Description": "Fetch 7-day weather forecast for zip code",
+          "InputParameters": {
+            "api_key": "${workflow.input.api_key}",
+            "zip_code": "${workflow.input.zip_code}"
+          },
+          "Label": "Fetch 7-Day Weather Forecast",
+          "Name": "Fetch7DayWeatherForecastTask",
+          "ObjectType": "workflow.WorkerTask",
+          "OnFailure": "FailureEndTask",
+          "OnSuccess": "SuccessEndTask",
+          "TaskDefinitionName": "Fetch7DayWeatherForecast",
+          "Version": 1
+        }
+      ],
+      "UiInputFilters": [],
+      "UiRenderingData": {
+        "Positions": [
+          {
+            "Name": "StartTask",
+            "X": 300,
+            "Y": 50
+          },
+          {
+            "Name": "Fetch7DayWeatherForecastTask",
+            "X": 300,
+            "Y": 150
+          },
+          {
+            "Name": "SuccessEndTask",
+            "X": 300,
+            "Y": 250
+          },
+          {
+            "Name": "FailureEndTask",
+            "X": 500,
+            "Y": 250
+          }
+        ]
+      },
+      "VariableDefinition": [],
+      "Version": 1
+    },
+    "ClassId": "bulk.RestSubRequest",
+    "ObjectType": "bulk.RestSubRequest",
+    "TargetMoid": "",
+    "Uri": "/v1/workflow/WorkflowDefinitions",
+    "Verb": "POST"
+  }
+]

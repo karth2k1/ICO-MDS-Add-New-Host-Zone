@@ -1,20 +1,23 @@
 """Flask routes for the ICO Workflow Generator."""
 
-import os
 from flask import Blueprint, Response, current_app, jsonify, render_template, request
 import json
 from app.debug_utils import debug_requested
+from app.llm_settings import (
+    LLM_MODEL_DISPLAY_NAME,
+    LLMSettingsStore,
+    is_effectively_configured,
+    masked_settings,
+    resolve_effective_settings,
+)
 
 main_bp = Blueprint("main", __name__)
 
 
 def is_llm_configured() -> bool:
     """Check if LLM credentials are configured."""
-    return bool(
-        os.environ.get("CISCO_CLIENT_ID")
-        and os.environ.get("CISCO_CLIENT_SECRET")
-        and os.environ.get("CISCO_APPKEY")
-    )
+    store = get_llm_settings_store()
+    return is_effectively_configured(resolve_effective_settings(store))
 
 
 def get_context_repo():
@@ -22,6 +25,26 @@ def get_context_repo():
     from app.context_store import ContextRepository
 
     return ContextRepository(current_app.config["CONTEXT_STORE_PATH"])
+
+
+def get_llm_settings_store() -> LLMSettingsStore:
+    """Get LLM settings store configured for this app."""
+    return LLMSettingsStore(current_app.config["LLM_SETTINGS_PATH"])
+
+
+def build_llm_client():
+    """Build LLM client from local settings (with env fallback)."""
+    from app.llm_client import CiscoLLMClient
+
+    settings = resolve_effective_settings(get_llm_settings_store())
+    return CiscoLLMClient(
+        client_id=settings.get("client_id"),
+        client_secret=settings.get("client_secret"),
+        appkey=settings.get("appkey"),
+        username=settings.get("username") or None,
+        oauth_url=settings.get("oauth_url") or None,
+        chat_url=settings.get("chat_url") or None,
+    )
 
 
 def is_debug_capability_enabled() -> bool:
@@ -35,55 +58,16 @@ def index():
     return render_template("input.html")
 
 
-@main_bp.route("/generate", methods=["POST"])
-def generate():
-    """Generate workflow from JIRA requirements."""
-    from app.parser import parse_jira_text
-    from app.rule_engine import RuleEngine
-    from app.generator import WorkflowGenerator
-    from app.validator import WorkflowValidator
-    
-    # Get JIRA text from form
-    jira_text = request.form.get("jira_text", "")
-    
-    if not jira_text.strip():
-        return jsonify({"error": "Please provide JIRA requirements text"}), 400
-    
-    try:
-        # Parse the JIRA text to extract requirements
-        requirements = parse_jira_text(jira_text)
-        
-        # Use rule engine to match requirements to templates
-        rule_engine = RuleEngine()
-        matched_templates = rule_engine.match(requirements)
-        
-        if not matched_templates:
-            return jsonify({
-                "error": "No matching workflow templates found for the given requirements",
-                "parsed_requirements": requirements
-            }), 404
-        
-        # Generate workflow from templates
-        generator = WorkflowGenerator()
-        workflow_json = generator.generate(matched_templates, requirements)
-        
-        # Validate the generated workflow
-        validator = WorkflowValidator()
-        validation_result = validator.validate(workflow_json)
-        
-        # Generate Mermaid diagram for preview
-        mermaid_diagram = generator.generate_mermaid(workflow_json)
-        
-        return jsonify({
-            "success": True,
-            "workflow": workflow_json,
-            "mermaid": mermaid_diagram,
-            "validation": validation_result,
-            "matched_templates": [t["name"] for t in matched_templates]
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+@main_bp.route("/context-manager")
+def context_manager():
+    """Dedicated page for context source configuration."""
+    return render_template("context.html")
+
+
+@main_bp.route("/llm-setup")
+def llm_setup_page():
+    """Dedicated page for LLM setup and connectivity checks."""
+    return render_template("llm_setup.html")
 
 
 @main_bp.route("/preview", methods=["POST"])
@@ -138,17 +122,6 @@ def validate():
     return jsonify(result)
 
 
-@main_bp.route("/templates")
-def list_templates():
-    """List available workflow templates."""
-    from app.rule_engine import RuleEngine
-    
-    rule_engine = RuleEngine()
-    templates = rule_engine.list_templates()
-    
-    return jsonify({"templates": templates})
-
-
 # ============================================================================
 # LLM-Based Generation Endpoints
 # ============================================================================
@@ -195,6 +168,7 @@ def generate_with_llm():
     try:
         from app.llm_generator import generate_workflow_with_llm
         context_repo = get_context_repo()
+        llm_client = build_llm_client()
         selected_context, context_diagnostics = context_repo.select_for_prompt(
             jira_text=jira_text,
             selected_artifact_ids=selected_context_ids,
@@ -204,6 +178,7 @@ def generate_with_llm():
         
         result = generate_workflow_with_llm(
             jira_text,
+            llm_client=llm_client,
             context_artifacts=[artifact.to_dict() for artifact in selected_context],
             context_diagnostics=context_diagnostics,
             debug_mode=debug_mode,
@@ -267,8 +242,8 @@ def analyze_jira():
     
     try:
         from app.llm_generator import analyze_jira_text
-        
-        analysis = analyze_jira_text(jira_text)
+
+        analysis = analyze_jira_text(jira_text, llm_client=build_llm_client())
         return jsonify({"analysis": analysis})
         
     except Exception as e:
@@ -301,12 +276,57 @@ def generate_custom_workflow():
     
     try:
         from app.llm_generator import generate_custom_workflow
-        
-        result = generate_custom_workflow(data["requirements"])
+
+        result = generate_custom_workflow(data["requirements"], llm_client=build_llm_client())
         return jsonify(result)
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route("/generate/openapi", methods=["POST"])
+def generate_from_openapi():
+    """Generate workflow from uploaded OpenAPI specification."""
+    from app.context_ingestors.openapi_ingestor import OpenAPIIngestor
+    from app.openapi_generator import generate_workflow_from_openapi_spec
+
+    file_obj = request.files.get("openapi_file") or request.files.get("file")
+    if file_obj is None:
+        return jsonify({"error": "Missing OpenAPI file upload. Use multipart field 'openapi_file'."}), 400
+
+    filename = (file_obj.filename or "").strip()
+    if not filename:
+        return jsonify({"error": "Uploaded OpenAPI file must have a filename."}), 400
+
+    lowered = filename.lower()
+    if not (lowered.endswith(".json") or lowered.endswith(".yaml") or lowered.endswith(".yml")):
+        return jsonify({"error": "OpenAPI upload must be .json, .yaml, or .yml"}), 400
+
+    try:
+        raw_bytes = file_obj.read()
+        spec = OpenAPIIngestor().parse_spec(raw_bytes, filename)
+        max_operations = request.form.get("max_operations")
+        path_prefix = request.form.get("path_prefix")
+        tag = request.form.get("tag")
+        include_sample_workflow_raw = request.form.get("include_sample_workflow")
+        include_sample_workflow = True
+        if isinstance(include_sample_workflow_raw, str) and include_sample_workflow_raw.strip():
+            include_sample_workflow = include_sample_workflow_raw.strip().lower() not in {"0", "false", "no", "off"}
+
+        result = generate_workflow_from_openapi_spec(
+            spec,
+            max_operations=int(max_operations) if max_operations else None,
+            path_prefix=path_prefix,
+            tag=tag,
+            include_sample_workflow=include_sample_workflow,
+        )
+        if not result.get("success"):
+            return jsonify(result), 400
+        return jsonify(result)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 @main_bp.route("/status")
@@ -317,11 +337,13 @@ def status():
     Returns:
         JSON with service status
     """
+    effective_llm_settings = resolve_effective_settings(get_llm_settings_store())
     return jsonify({
         "service": "ICO Workflow Generator",
         "version": "1.0.0",
-        "llm_configured": is_llm_configured(),
-        "llm_provider": "Cisco Chat AI (GPT-4.1)" if is_llm_configured() else None,
+        "llm_configured": is_effectively_configured(effective_llm_settings),
+        "llm_provider": "LLM",
+        "llm_model": LLM_MODEL_DISPLAY_NAME,
         "debug_mode_enabled": is_debug_capability_enabled(),
         "debug_policy": {
             "requires_per_request_toggle": True,
@@ -329,15 +351,87 @@ def status():
             "redaction_enabled": True,
         },
         "endpoints": {
-            "rule_based": "/generate",
             "llm_based": "/generate/llm",
+            "openapi_based": "/generate/openapi",
             "analyze": "/analyze",
             "custom": "/generate/custom",
+            "llm_setup_page": "/llm-setup",
+            "llm_setup": "/llm/setup",
+            "llm_test": "/llm/test",
+            "context_manager": "/context-manager",
             "context_upload": "/context/upload",
             "context_github_public": "/context/github/public",
             "context_list": "/context",
         }
     })
+
+
+@main_bp.route("/llm/setup", methods=["GET"])
+def get_llm_setup():
+    """Get merged LLM settings for setup UI (masked)."""
+    store = get_llm_settings_store()
+    effective = resolve_effective_settings(store)
+    local = store.load_local()
+    return jsonify(
+        {
+            "model": LLM_MODEL_DISPLAY_NAME,
+            "configured": is_effectively_configured(effective),
+            "settings": masked_settings(effective),
+            "meta": {
+                "source": "local+env",
+                "has_local_settings": bool(local),
+            },
+        }
+    )
+
+
+@main_bp.route("/llm/setup", methods=["POST"])
+def save_llm_setup():
+    """Persist editable LLM settings to local file."""
+    payload = request.get_json(silent=True) or {}
+    store = get_llm_settings_store()
+    try:
+        saved = store.save(payload)
+        from app.llm_client import reset_llm_client
+
+        reset_llm_client()
+        return jsonify(
+            {
+                "success": True,
+                "model": LLM_MODEL_DISPLAY_NAME,
+                "configured": is_effectively_configured(saved),
+                "settings": masked_settings(saved),
+            }
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@main_bp.route("/llm/test", methods=["POST"])
+def test_llm_setup():
+    """Validate LLM connectivity for current effective settings."""
+    try:
+        client = build_llm_client()
+        token = client._get_access_token()
+        if not token:
+            raise RuntimeError("Access token acquisition returned empty token")
+        return jsonify(
+            {
+                "success": True,
+                "model": LLM_MODEL_DISPLAY_NAME,
+                "message": "LLM connectivity check passed",
+            }
+        )
+    except Exception as exc:
+        return jsonify(
+            {
+                "success": False,
+                "model": LLM_MODEL_DISPLAY_NAME,
+                "error": str(exc),
+            }
+        ), 400
 
 
 @main_bp.route("/context", methods=["GET"])

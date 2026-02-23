@@ -22,6 +22,7 @@ def app():
             {
                 "TESTING": True,
                 "CONTEXT_STORE_PATH": os.path.join(temp_dir, "context_artifacts.json"),
+                "LLM_SETTINGS_PATH": os.path.join(temp_dir, "llm_settings.json"),
             }
         )
         yield app
